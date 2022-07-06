@@ -1,14 +1,20 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use device_query::{DeviceQuery, DeviceState, Keycode};
 use walkdir::WalkDir;
 
 use crate::config::Config;
 
-pub fn is_hotkey_pressed(device_state: &DeviceState) -> bool {
+pub fn is_hotkey_pressed(device_state: &DeviceState, hotkey_str: &Vec<String>) -> bool {
     let keys: Vec<Keycode> = device_state.get_keys();
-    // TODO: turn into cli args
-    let hotkey = vec![Keycode::LControl, Keycode::LAlt, Keycode::Backspace];
+
+    let mut hotkey: Vec<Keycode> = Vec::new();
+    for key in hotkey_str {
+        hotkey.push(Keycode::from_str(key).unwrap());
+    }
 
     let mut hotkey_pressed = true;
 
@@ -30,8 +36,6 @@ pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
             .to_string();
         let path = Path::new(&dir);
         let shortcuts_dir = WalkDir::new(path);
-
-        println!("{:#?}", dir);
 
         let mut shortcuts: Vec<PathBuf> = shortcuts_dir
             .into_iter()
@@ -61,8 +65,6 @@ pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
 
         result.append(&mut shortcuts);
     }
-
-    println!("{:#?}", result);
 
     result
 }

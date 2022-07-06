@@ -47,10 +47,24 @@ impl Default for Search {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct General {
+    pub hotkey: Vec<String>,
+}
+
+impl Default for General {
+    fn default() -> Self {
+        Self {
+            hotkey: vec!["LAlt".to_string(), "Backspace".to_string()],
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Config {
     pub window: Window,
     pub search: Search,
+    pub general: General,
 }
 
 pub fn get_config() -> Config {

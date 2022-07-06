@@ -47,7 +47,7 @@ fn main() {
     let device_state = DeviceState::new();
 
     loop {
-        if is_hotkey_pressed(&device_state) {
+        if is_hotkey_pressed(&device_state, &config.general.hotkey) {
             spawn_window(config);
         }
     }

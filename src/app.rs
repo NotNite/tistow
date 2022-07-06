@@ -95,7 +95,7 @@ impl eframe::App for App {
         }
 
         // global hotkeys
-        if is_hotkey_pressed(&self.device_state) {
+        if is_hotkey_pressed(&self.device_state, &self.config.general.hotkey) {
             self.input = String::default();
             self.focused = -1;
             _frame.set_visibility(true);
