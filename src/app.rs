@@ -1,5 +1,6 @@
 use std::process::Command;
 
+use arboard::Clipboard;
 use device_query::DeviceState;
 use egui::Key;
 
@@ -37,22 +38,34 @@ impl App {
     fn handle_select(&mut self, selection: &SearchResult) -> bool {
         println!("select: {}", selection.text);
         if let Some(action) = &selection.action {
-            match action {
+            let should_close = match action {
                 ResultAction::Open { path } => {
                     println!("open: {}", path);
                     Command::new("explorer")
                         .arg(path)
                         .spawn()
                         .expect("couldn't spawn process");
-                }
-            }
 
-            self.input = String::default();
-            self.focused = -1;
-            return true;
+                    true
+                }
+                ResultAction::Copy { text } => {
+                    let mut clipboard = Clipboard::new().unwrap();
+                    clipboard
+                        .set_text(text.to_string())
+                        .expect("couldn't copy to clipboard");
+
+                    false
+                }
+            };
+
+            if should_close {
+                self.input = String::default();
+                self.focused = -1;
+                return true;
+            }
         }
 
-        return false;
+        false
     }
 }
 
@@ -65,7 +78,7 @@ impl eframe::App for App {
         let results = self.aggregator.search(&self.input);
         self.items = results.len().try_into().unwrap();
 
-        println!("{}", self.focused);
+        //println!("{}", self.focused);
 
         if ctx.input().key_pressed(egui::Key::Tab) {
             self.cycle_focus()
@@ -129,6 +142,7 @@ impl eframe::App for App {
 
                         if self.focused == pos.try_into().unwrap() {
                             label_res.request_focus();
+                            label_res.scroll_to_me(None);
                         }
                     }
                 });

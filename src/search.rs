@@ -16,6 +16,7 @@ pub struct SearchResult {
 
 pub enum ResultAction {
     Open { path: String },
+    Copy { text: String },
 }
 
 pub struct Search {
@@ -47,15 +48,15 @@ impl Search {
         let r = meval::eval_str(input.trim());
 
         let res = if let Ok(n) = r {
-            format!("= {}", n)
+            n.to_string()
         } else {
-            "= ERROR".to_string()
+            "ERROR".to_string()
         };
 
         vec![SearchResult {
             mode: SearchMode::Calculator,
-            text: res,
-            action: None,
+            text: format!("= {}", res),
+            action: Some(ResultAction::Copy { text: res }),
         }]
     }
 
