@@ -74,25 +74,25 @@ impl eframe::App for App {
         //self.exited = true;
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let results = self.aggregator.search(&self.input);
         self.items = results.len().try_into().unwrap();
 
         //println!("{}", self.focused);
 
         if ctx.input().key_pressed(egui::Key::Tab) {
-            self.cycle_focus()
+            self.cycle_focus();
         }
 
         if ctx.input().key_down(Key::Escape) {
-            _frame.set_visibility(false);
+            frame.set_visibility(false);
         }
 
         // global hotkeys
         if is_hotkey_pressed(&self.device_state) {
             self.input = String::default();
             self.focused = -1;
-            _frame.set_visibility(true);
+            frame.set_visibility(true);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -108,7 +108,7 @@ impl eframe::App for App {
 
                     let should_close = self.handle_select(result);
                     if should_close {
-                        _frame.set_visibility(false);
+                        frame.set_visibility(false);
                     }
                 }
             // user selects option manually
@@ -117,7 +117,7 @@ impl eframe::App for App {
 
                 let should_close = self.handle_select(result);
                 if should_close {
-                    _frame.set_visibility(false);
+                    frame.set_visibility(false);
                 }
             }
 
