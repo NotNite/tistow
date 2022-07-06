@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::util::get_shortcuts;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 
@@ -13,7 +15,7 @@ pub struct SearchResult {
 }
 
 pub enum ResultAction {
-    Open { path: String },
+    Open { path: PathBuf },
     Copy { text: String },
 }
 
@@ -63,25 +65,19 @@ impl Search {
     }
 
     fn mode_search(&mut self, input: &str) -> Vec<SearchResult> {
-        let mut results: Vec<SearchResult> = Vec::new();
-        let options = get_shortcuts();
+        get_shortcuts()
+            .into_iter()
+            .filter_map(|path| {
+                let name = path.file_stem()?.to_str()?.to_string();
 
-        for option in options {
-            let name = option
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or_default();
-            if self.matcher.fuzzy_match(name, input).is_some() {
-                results.push(SearchResult {
-                    mode: SearchMode::Search,
-                    text: name.to_string(),
-                    action: Some(ResultAction::Open {
-                        path: option.to_str().unwrap_or_default().to_string(),
-                    }),
-                });
-            }
-        }
-
-        results
+                self.matcher
+                    .fuzzy_match(&name, input)
+                    .map(|_| SearchResult {
+                        mode: SearchMode::Search,
+                        text: name.to_string(),
+                        action: Some(ResultAction::Open { path }),
+                    })
+            })
+            .collect()
     }
 }
