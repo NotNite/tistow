@@ -2,7 +2,7 @@
 name = "tistow"
 description = "The Informational Search Tool on Windows"
 authors = ["NotNite"]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

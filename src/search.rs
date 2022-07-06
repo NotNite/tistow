@@ -1,7 +1,5 @@
-use std::path::{Path, PathBuf};
-
+use crate::util::get_shortcuts;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use walkdir::WalkDir;
 
 pub enum SearchMode {
     Search,
@@ -62,25 +60,7 @@ impl Search {
 
     fn mode_search(&mut self, input: &str) -> Vec<SearchResult> {
         let mut results: Vec<SearchResult> = Vec::new();
-
-        let start_menu = Path::new(&std::env::var("AppData").unwrap())
-            .join("Microsoft")
-            .join("Windows")
-            .join("Start Menu");
-
-        let options: Vec<PathBuf> = WalkDir::new(start_menu)
-            .into_iter()
-            .filter(|x| {
-                if let Ok(x) = x {
-                    let path = x.path().to_str().unwrap();
-
-                    path.to_lowercase().ends_with(".lnk")
-                } else {
-                    false
-                }
-            })
-            .map(|x| x.unwrap().path().to_owned())
-            .collect();
+        let options = get_shortcuts();
 
         for option in options {
             let name = option.file_stem().unwrap().to_str().unwrap();
