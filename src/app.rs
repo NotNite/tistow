@@ -150,6 +150,13 @@ impl eframe::App for App {
                             label_res.request_focus();
                             label_res.scroll_to_me(None);
                         }
+
+                        if label_res.clicked() {
+                            let should_close = self.handle_select(result);
+                            if should_close {
+                                _frame.set_visibility(false);
+                            }
+                        }
                     }
                 });
         });
