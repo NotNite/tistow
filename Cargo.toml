@@ -2,6 +2,7 @@
 name = "tistow"
 description = "The Informational Search Tool on Windows"
 authors = ["NotNite"]
+license = "MIT"
 version = "0.1.3"
 edition = "2021"
 
