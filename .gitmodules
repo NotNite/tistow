@@ -1,0 +1,4 @@
+[submodule "egui"]
+	path = egui
+	url = https://github.com/NotNite/egui.git
+	branch = eframe-visible
