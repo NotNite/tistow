@@ -63,13 +63,16 @@ impl Search {
         let options = get_shortcuts();
 
         for option in options {
-            let name = option.file_stem().unwrap().to_str().unwrap();
+            let name = option
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
             if self.matcher.fuzzy_match(name, input).is_some() {
                 results.push(SearchResult {
                     mode: SearchMode::Search,
                     text: name.to_string(),
                     action: Some(ResultAction::Open {
-                        path: option.to_str().unwrap().to_string(),
+                        path: option.to_str().unwrap_or_default().to_string(),
                     }),
                 });
             }
