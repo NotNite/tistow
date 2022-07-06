@@ -1,24 +1,30 @@
-use clap::Parser;
 use device_query::DeviceState;
 use eframe::egui;
 use egui::{Pos2, Vec2};
-use search::Search;
 
 mod app;
+mod config;
 mod search;
 mod util;
 
 use app::App;
+use config::Config;
 use util::is_hotkey_pressed;
 
-fn spawn_window(x: f32, y: f32, aggregator: Search) -> ! {
+fn spawn_window(config: Config) -> ! {
     let options = eframe::NativeOptions {
         transparent: true,
         resizable: false,
         always_on_top: true,
         decorated: false,
-        initial_window_size: Some(Vec2 { x: 640., y: 320. }),
-        initial_window_pos: Some(Pos2 { x, y }),
+        initial_window_size: Some(Vec2 {
+            x: config.window.width as f32,
+            y: config.window.height as f32,
+        }),
+        initial_window_pos: Some(Pos2 {
+            x: config.window.x as f32,
+            y: config.window.y as f32,
+        }),
         ..eframe::NativeOptions::default()
     };
 
@@ -28,31 +34,21 @@ fn spawn_window(x: f32, y: f32, aggregator: Search) -> ! {
         Box::new(|cc| {
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
 
-            Box::new(App::new(aggregator))
+            Box::new(App::new(config))
         }),
     );
 }
 
-#[derive(Parser, Debug)]
-struct Args {
-    /// X coordinate of the window
-    #[clap(default_value_t = 640.)]
-    x: f32,
-    /// Y coordinate of the window
-    #[clap(default_value_t = 380.)]
-    y: f32,
-}
-
 fn main() {
-    let args = Args::parse();
+    let config = config::get_config();
+    println!("{:#?}", config);
 
     // spawn when hotkey first pressed
     let device_state = DeviceState::new();
-    let aggregator = Search::new();
 
     loop {
         if is_hotkey_pressed(&device_state) {
-            spawn_window(args.x, args.y, aggregator);
+            spawn_window(config);
         }
     }
 }

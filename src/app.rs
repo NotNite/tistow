@@ -4,27 +4,33 @@ use arboard::Clipboard;
 use device_query::DeviceState;
 use egui::Key;
 
+use crate::config::Config;
 use crate::search::{ResultAction, Search, SearchResult};
-use crate::util::is_hotkey_pressed;
+use crate::util::{get_shortcuts, is_hotkey_pressed};
 
 pub struct App {
     input: String,
     device_state: DeviceState,
-    aggregator: Search,
+    search: Search,
+    config: Config,
 
     focused: i32,
     items: u32,
 }
 
 impl App {
-    pub fn new(aggregator: Search) -> Self {
+    pub fn new(config: Config) -> Self {
+        let shortcuts = get_shortcuts(&config);
+        let search = Search::new(shortcuts);
+
         Self {
             input: String::default(),
             device_state: DeviceState::new(),
-            aggregator,
+            search,
+            config,
 
             focused: -1,
-            items: 5,
+            items: 0,
         }
     }
 
@@ -75,7 +81,7 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let results = self.aggregator.search(&self.input);
+        let results = self.search.search(&self.input);
         self.items = results.len().try_into().unwrap();
 
         //println!("{}", self.focused);
