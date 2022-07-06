@@ -11,44 +11,57 @@ pub fn is_hotkey_pressed(device_state: &DeviceState) -> bool {
 }
 
 #[cfg(target_os = "windows")]
-fn walkdir_to_vec(walkdir: WalkDir) -> Vec<PathBuf> {
-    use walkdir::WalkDir;
-    walkdir
-        .into_iter()
-        .filter(|x| {
-            if let Ok(x) = x {
-                let path = x.path().to_str().unwrap();
-
-                path.to_lowercase().ends_with(".lnk")
-            } else {
-                false
-            }
-        })
-        .map(|x| x.unwrap().path().to_owned())
-        .collect()
-}
-
 pub fn get_shortcuts() -> Vec<PathBuf> {
-    let mut result: Vec<PathBuf> = Vec::new();
+    use std::path::Path;
+    use walkdir::WalkDir;
 
-    #[cfg(target_os = "windows")]
-    {
-        use std::path::Path;
-        let appdata = Path::new(&std::env::var("AppData").unwrap())
-            .join("Microsoft")
-            .join("Windows")
-            .join("Start Menu");
-        let programdata = Path::new(&std::env::var("ProgramData").unwrap())
-            .join("Microsoft")
-            .join("Windows")
-            .join("Start Menu");
-
-        let mut appdata_options: Vec<PathBuf> = walkdir_to_vec(WalkDir::new(appdata));
-        let mut programdata_options: Vec<PathBuf> = walkdir_to_vec(WalkDir::new(programdata));
-
-        result.append(&mut appdata_options);
-        result.append(&mut programdata_options);
+    fn walkdir_to_vec(walkdir: WalkDir) -> Vec<PathBuf> {
+        walkdir
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|x| x.path().extension().map(|e| e == "lnk").unwrap_or_default())
+            .map(|x| x.path().to_owned())
+            .collect()
     }
 
-    result
+    Iterator::chain(
+        walkdir_to_vec(WalkDir::new(
+            Path::new(&std::env::var("AppData").unwrap())
+                .join("Microsoft")
+                .join("Windows")
+                .join("Start Menu"),
+        ))
+        .into_iter(),
+        walkdir_to_vec(WalkDir::new(
+            Path::new(&std::env::var("ProgramData").unwrap())
+                .join("Microsoft")
+                .join("Windows"),
+        ))
+        .into_iter(),
+    )
+    .collect()
+}
+
+#[cfg(target_os = "macos")]
+pub fn get_shortcuts() -> Vec<PathBuf> {
+    std::fs::read_dir("/Applications")
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|de| {
+            let path = de.path();
+            let file_name = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            !file_name.starts_with('.') && file_name.ends_with(".app")
+        })
+        .filter_map(|de| {
+            Some(
+                de.path()
+                    .join("Contents")
+                    .join("MacOS")
+                    .join(de.path().file_name()?.to_str()?.strip_suffix(".app")?),
+            )
+        })
+        .collect()
 }

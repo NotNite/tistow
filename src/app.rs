@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use arboard::Clipboard;
 use device_query::DeviceState;
 use egui::Key;
@@ -40,11 +38,7 @@ impl App {
         if let Some(action) = &selection.action {
             let should_close = match action {
                 ResultAction::Open { path } => {
-                    println!("open: {}", path);
-                    Command::new("explorer")
-                        .arg(path)
-                        .spawn()
-                        .expect("couldn't spawn process");
+                    open::that(path).expect("couldn't spawn process");
 
                     true
                 }
