@@ -1,7 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use device_query::{DeviceQuery, DeviceState, Keycode};
-use walkdir::WalkDir;
 
 pub fn is_hotkey_pressed(device_state: &DeviceState) -> bool {
     let keys: Vec<Keycode> = device_state.get_keys();
@@ -19,8 +18,10 @@ pub fn is_hotkey_pressed(device_state: &DeviceState) -> bool {
     hotkey_pressed
 }
 
+#[cfg(target_os = "windows")]
 fn walkdir_to_vec(walkdir: WalkDir) -> Vec<PathBuf> {
-    let deez: Vec<PathBuf> = walkdir
+    use walkdir::WalkDir;
+    walkdir
         .into_iter()
         .filter(|x| {
             if let Ok(x) = x {
@@ -32,28 +33,30 @@ fn walkdir_to_vec(walkdir: WalkDir) -> Vec<PathBuf> {
             }
         })
         .map(|x| x.unwrap().path().to_owned())
-        .collect();
-
-    deez
+        .collect()
 }
 
 pub fn get_shortcuts() -> Vec<PathBuf> {
     let mut result: Vec<PathBuf> = Vec::new();
 
-    let appdata = Path::new(&std::env::var("AppData").unwrap())
-        .join("Microsoft")
-        .join("Windows")
-        .join("Start Menu");
-    let programdata = Path::new(&std::env::var("ProgramData").unwrap())
-        .join("Microsoft")
-        .join("Windows")
-        .join("Start Menu");
+    #[cfg(target_os = "windows")]
+    {
+        use std::path::Path;
+        let appdata = Path::new(&std::env::var("AppData").unwrap())
+            .join("Microsoft")
+            .join("Windows")
+            .join("Start Menu");
+        let programdata = Path::new(&std::env::var("ProgramData").unwrap())
+            .join("Microsoft")
+            .join("Windows")
+            .join("Start Menu");
 
-    let mut appdata_options: Vec<PathBuf> = walkdir_to_vec(WalkDir::new(appdata));
-    let mut programdata_options: Vec<PathBuf> = walkdir_to_vec(WalkDir::new(programdata));
+        let mut appdata_options: Vec<PathBuf> = walkdir_to_vec(WalkDir::new(appdata));
+        let mut programdata_options: Vec<PathBuf> = walkdir_to_vec(WalkDir::new(programdata));
 
-    result.append(&mut appdata_options);
-    result.append(&mut programdata_options);
+        result.append(&mut appdata_options);
+        result.append(&mut programdata_options);
+    }
 
     result
 }
