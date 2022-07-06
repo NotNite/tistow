@@ -103,23 +103,22 @@ impl eframe::App for App {
                     .lock_focus(true);
                 let input_res = ui.add_sized((ui.available_width(), 18_f32), input_widget);
 
-                // user presses enter in the input field (select first input)
-                if input_res.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
-                    if !results.is_empty() {
-                        let result = &results[0];
+                if ui.input().key_pressed(egui::Key::Enter) && !results.is_empty() {
+                    let result = if input_res.lost_focus() {
+                        // user presses enter in the input field (select first input)
+                        Some(&results[0])
+                    } else if self.focused.is_some() {
+                        // user selects option manually
+                        Some(&results[self.focused.unwrap()])
+                    } else {
+                        None
+                    };
 
+                    if let Some(result) = result {
                         let should_close = self.handle_select(result)?;
                         if should_close {
                             frame.set_visibility(false);
                         }
-                    }
-                // user selects option manually
-                } else if self.focused.is_some() && ui.input().key_pressed(egui::Key::Enter) {
-                    let result = &results[self.focused.unwrap()];
-
-                    let should_close = self.handle_select(result)?;
-                    if should_close {
-                        frame.set_visibility(false);
                     }
                 }
 
