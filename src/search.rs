@@ -29,6 +29,10 @@ impl Search {
     }
 
     pub fn search(&mut self, input: &str) -> Vec<SearchResult> {
+        if input.is_empty() {
+            return vec![];
+        }
+
         // TODO: find better way to do this
         let mode = if input.starts_with('=') {
             SearchMode::Calculator
