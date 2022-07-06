@@ -11,8 +11,8 @@ pub struct App {
     device_state: DeviceState,
     aggregator: Search,
 
-    focused: i32,
-    items: u32,
+    focused: Option<usize>,
+    items: usize,
 }
 
 impl App {
@@ -22,17 +22,22 @@ impl App {
             device_state: DeviceState::new(),
             aggregator,
 
-            focused: -1,
+            focused: None,
             items: 5,
         }
     }
 
-    fn cycle_focus(&mut self) -> anyhow::Result<()> {
-        self.focused += 1;
-        if self.focused >= self.items.try_into()? {
-            self.focused = -1;
+    fn cycle_focus(&mut self) {
+        self.focused = match self.focused {
+            Some(n) => {
+                if n + 1 == self.items {
+                    None
+                } else {
+                    Some(n + 1)
+                }
+            }
+            None => Some(0),
         }
-        Ok(())
     }
 
     fn handle_select(&mut self, selection: &SearchResult) -> anyhow::Result<bool> {
@@ -59,7 +64,7 @@ impl App {
 
         if should_close {
             self.input = String::default();
-            self.focused = -1;
+            self.focused = None;
         }
         Ok(should_close)
     }
@@ -72,12 +77,12 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let results = self.aggregator.search(&self.input);
-        self.items = results.len().try_into().unwrap();
+        self.items = results.len();
 
         //println!("{}", self.focused);
 
         if ctx.input().key_pressed(egui::Key::Tab) {
-            self.cycle_focus().unwrap();
+            self.cycle_focus();
         }
 
         if ctx.input().key_down(Key::Escape) {
@@ -87,7 +92,7 @@ impl eframe::App for App {
         // global hotkeys
         if is_hotkey_pressed(&self.device_state) {
             self.input = String::default();
-            self.focused = -1;
+            self.focused = None;
             frame.set_visibility(true);
         }
 
@@ -109,8 +114,8 @@ impl eframe::App for App {
                         }
                     }
                 // user selects option manually
-                } else if self.focused != -1 && ui.input().key_pressed(egui::Key::Enter) {
-                    let result = &results[self.focused as usize];
+                } else if self.focused.is_some() && ui.input().key_pressed(egui::Key::Enter) {
+                    let result = &results[self.focused.unwrap()];
 
                     let should_close = self.handle_select(result)?;
                     if should_close {
@@ -118,7 +123,7 @@ impl eframe::App for App {
                     }
                 }
 
-                if self.focused == -1 {
+                if self.focused.is_none() {
                     input_res.request_focus();
                 }
 
