@@ -186,7 +186,11 @@ impl App {
                 }
 
                 for (pos, result) in results.iter().enumerate() {
-                    let label_res = scroll_ui.selectable_label(false, &result.text);
+                    let mut label_res = scroll_ui.selectable_label(false, &result.text);
+
+                    if let Some(ResultAction::Open { path }) = &result.action {
+                        label_res = label_res.on_hover_text(path.to_str().unwrap());
+                    }
 
                     if opened.focused == Some(pos) {
                         label_res.request_focus();
