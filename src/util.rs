@@ -1,12 +1,11 @@
-use std::{collections::HashSet, path::PathBuf, str::FromStr};
+use std::{collections::HashSet, path::PathBuf};
 
 use crate::config::Config;
 use device_query::{DeviceQuery, DeviceState, Keycode};
 
-pub fn is_hotkey_pressed(device_state: &DeviceState, hotkey_str: &[String]) -> bool {
-    HashSet::<Keycode>::from_iter(device_state.get_keys()).is_superset(&HashSet::from_iter(
-        hotkey_str.iter().map(|k| Keycode::from_str(k).unwrap()),
-    ))
+pub fn is_hotkey_pressed(device_state: &DeviceState, hotkey_str: &[Keycode]) -> bool {
+    HashSet::<Keycode>::from_iter(device_state.get_keys())
+        .is_superset(&HashSet::from_iter(hotkey_str.iter().copied()))
 }
 
 #[cfg(target_os = "macos")]

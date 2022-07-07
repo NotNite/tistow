@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync;
 
 use anyhow::Context;
@@ -57,11 +58,18 @@ impl App {
         let (events_tx, events_rx) = sync::mpsc::channel();
         let hotkey_thread = std::thread::spawn({
             let config = config.clone();
+            let hotkeys: Vec<_> = config
+                .general
+                .hotkey
+                .iter()
+                .map(|hk| device_query::Keycode::from_str(hk).unwrap())
+                .collect();
+
             move || {
                 let device_state = device_query::DeviceState::new();
                 loop {
                     // global hotkeys
-                    if crate::util::is_hotkey_pressed(&device_state, &config.general.hotkey) {
+                    if crate::util::is_hotkey_pressed(&device_state, &hotkeys) {
                         events_tx.send(HotkeyEvent::Open).unwrap();
                         ctx.request_repaint();
                     }
