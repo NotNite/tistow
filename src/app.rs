@@ -47,11 +47,23 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(
-        aggregator: Search,
-        hotkey_thread: std::thread::JoinHandle<()>,
-        events_rx: sync::mpsc::Receiver<HotkeyEvent>,
-    ) -> Self {
+    pub fn new(aggregator: Search, ctx: egui::Context) -> Self {
+        let (events_tx, events_rx) = sync::mpsc::channel();
+        let hotkey_thread = std::thread::spawn({
+            move || {
+                let device_state = device_query::DeviceState::new();
+                loop {
+                    // global hotkeys
+                    if crate::util::is_hotkey_pressed(&device_state) {
+                        events_tx.send(HotkeyEvent::Open).unwrap();
+                        ctx.request_repaint();
+                    }
+
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            }
+        });
+
         Self {
             aggregator,
             state: AppState::First,
