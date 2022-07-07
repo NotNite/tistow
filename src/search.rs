@@ -1,5 +1,6 @@
-use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use std::path::PathBuf;
+
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 
 pub enum SearchMode {
     Search,
@@ -13,7 +14,7 @@ pub struct SearchResult {
 }
 
 pub enum ResultAction {
-    Open { path: String },
+    Open { path: PathBuf },
     Copy { text: String },
 }
 
@@ -30,7 +31,11 @@ impl Search {
         }
     }
 
-    pub fn search(&mut self, input: &str) -> Vec<SearchResult> {
+    pub fn search(&self, input: &str) -> Vec<SearchResult> {
+        if input.is_empty() {
+            return vec![];
+        }
+
         // TODO: find better way to do this
         let mode = if input.starts_with('=') {
             SearchMode::Calculator
@@ -44,7 +49,7 @@ impl Search {
         }
     }
 
-    fn mode_calculator(&mut self, input: &str) -> Vec<SearchResult> {
+    fn mode_calculator(&self, input: &str) -> Vec<SearchResult> {
         let r = meval::eval_str(input.trim());
 
         let res = if let Ok(n) = r {
@@ -60,27 +65,21 @@ impl Search {
         }]
     }
 
-    fn mode_search(&mut self, input: &str) -> Vec<SearchResult> {
-        let mut results: Vec<SearchResult> = Vec::new();
-        let options = &self.shortcuts;
+    fn mode_search(&self, input: &str) -> Vec<SearchResult> {
+        self.shortcuts
+            .iter()
+            .cloned()
+            .filter_map(|path| {
+                let name = path.file_stem()?.to_str()?.to_string();
 
-        for option in options {
-            let name = option.file_stem().unwrap().to_str().unwrap();
-            if self
-                .matcher
-                .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
-                .is_some()
-            {
-                results.push(SearchResult {
-                    mode: SearchMode::Search,
-                    text: name.to_string(),
-                    action: Some(ResultAction::Open {
-                        path: option.to_str().unwrap().to_string(),
-                    }),
-                });
-            }
-        }
-
-        results
+                self.matcher
+                    .fuzzy_match(&name, input)
+                    .map(|_| SearchResult {
+                        mode: SearchMode::Search,
+                        text: name.to_string(),
+                        action: Some(ResultAction::Open { path }),
+                    })
+            })
+            .collect()
     }
 }

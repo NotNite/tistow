@@ -6,7 +6,7 @@ use figment::{
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Window {
     pub width: u32,
     pub height: u32,
@@ -25,7 +25,7 @@ impl Default for Window {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Search {
     pub shortcut_paths: Vec<String>,
     pub ignore_paths: Vec<String>,
@@ -45,7 +45,7 @@ impl Default for Search {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct General {
     pub hotkey: Vec<String>,
 }
@@ -58,7 +58,7 @@ impl Default for General {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Config {
     pub window: Window,
     pub search: Search,

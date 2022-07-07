@@ -1,70 +1,73 @@
-use std::{
-    path::{Path, PathBuf},
-    str::FromStr,
-};
-
-use device_query::{DeviceQuery, DeviceState, Keycode};
-use walkdir::WalkDir;
+use std::{collections::HashSet, path::PathBuf};
 
 use crate::config::Config;
+use device_query::{DeviceQuery, DeviceState, Keycode};
 
-pub fn is_hotkey_pressed(device_state: &DeviceState, hotkey_str: &Vec<String>) -> bool {
-    let keys: Vec<Keycode> = device_state.get_keys();
-
-    let mut hotkey: Vec<Keycode> = Vec::new();
-    for key in hotkey_str {
-        hotkey.push(Keycode::from_str(key).unwrap());
-    }
-
-    let mut hotkey_pressed = true;
-
-    for key in hotkey {
-        if !keys.contains(&key) {
-            hotkey_pressed = false;
-        }
-    }
-
-    hotkey_pressed
+pub fn is_hotkey_pressed(device_state: &DeviceState, hotkey_str: &[Keycode]) -> bool {
+    HashSet::<Keycode>::from_iter(device_state.get_keys())
+        .is_superset(&HashSet::from_iter(hotkey_str.iter().copied()))
 }
 
+#[cfg(target_os = "macos")]
+pub fn get_shortcuts(_config: &Config) -> Vec<PathBuf> {
+    std::fs::read_dir("/Applications")
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|de| {
+            let path = de.path();
+            let file_name = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            !file_name.starts_with('.') && file_name.ends_with(".app")
+        })
+        .filter_map(|de| {
+            Some(
+                de.path()
+                    .join("Contents")
+                    .join("MacOS")
+                    .join(de.path().file_name()?.to_str()?.strip_suffix(".app")?),
+            )
+        })
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
 pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
-    let mut result: Vec<PathBuf> = Vec::new();
+    use std::path::Path;
 
-    for path in &config.search.shortcut_paths {
-        let dir = shellexpand::env(&path)
-            .expect("couldn't get shortcut path")
-            .to_string();
-        let path = Path::new(&dir);
-        let shortcuts_dir = WalkDir::new(path);
-
-        let mut shortcuts: Vec<PathBuf> = shortcuts_dir
-            .into_iter()
-            .filter(|x| {
-                if let Ok(x) = x {
+    config
+        .search
+        .shortcut_paths
+        .iter()
+        .map(|path| {
+            walkdir::WalkDir::new(Path::new(
+                shellexpand::env(&path)
+                    .expect("couldn't get shortcut path")
+                    .as_ref(),
+            ))
+        })
+        .flat_map(|shortcuts_dir| {
+            shortcuts_dir
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|x| {
                     let path = x.path().to_str().unwrap();
                     let lowercase = path.to_lowercase();
-
-                    let mut ignored = false;
-                    for ignore_str in &config.search.ignore_paths {
-                        let ignore_dir = shellexpand::env(&ignore_str)
-                            .expect("couldn't get shortcut ignore dir")
-                            .to_string();
-
-                        if lowercase.contains(&ignore_dir.to_lowercase()) {
-                            ignored = true;
-                        }
-                    }
+                    let ignored = config
+                        .search
+                        .ignore_paths
+                        .iter()
+                        .map(|ignore_str| {
+                            shellexpand::env(&ignore_str)
+                                .expect("couldn't get shortcut ignore dir")
+                                .to_lowercase()
+                        })
+                        .any(|ignore_dir| lowercase.contains(&ignore_dir));
 
                     !ignored && lowercase.ends_with(".lnk")
-                } else {
-                    false
-                }
-            })
-            .map(|x| x.unwrap().path().to_owned())
-            .collect();
-
-        result.append(&mut shortcuts);
-    }
-
-    result
+                })
+                .map(|x| x.path().to_owned())
+        })
+        .collect()
 }
