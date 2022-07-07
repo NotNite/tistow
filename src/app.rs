@@ -67,6 +67,7 @@ impl App {
 
             move || {
                 let device_state = device_query::DeviceState::new();
+
                 loop {
                     // global hotkeys
                     if crate::util::is_hotkey_pressed(&device_state, &hotkeys) {

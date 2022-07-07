@@ -32,6 +32,7 @@ pub struct Search {
 }
 
 impl Default for Search {
+    #[cfg(target_os = "windows")]
     fn default() -> Self {
         Self {
             shortcut_paths: vec![
@@ -41,6 +42,16 @@ impl Default for Search {
             ignore_paths: vec![
                 "${AppData}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup".to_string(),
             ],
+        }
+    }
+    #[cfg(target_os = "macos")]
+    fn default() -> Self {
+        Self {
+            shortcut_paths: vec![
+                "/Applications".to_string(),
+                //"${HOME}/Applications".to_string(),
+            ],
+            ignore_paths: vec![],
         }
     }
 }

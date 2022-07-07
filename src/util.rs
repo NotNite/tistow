@@ -11,30 +11,6 @@ pub fn is_hotkey_pressed(device_state: &DeviceState, hotkey_str: &[Keycode]) -> 
         .is_superset(&HashSet::from_iter(hotkey_str.iter().copied()))
 }
 
-#[cfg(target_os = "macos")]
-pub fn get_shortcuts(_config: &Config) -> Vec<PathBuf> {
-    std::fs::read_dir("/Applications")
-        .unwrap()
-        .filter_map(Result::ok)
-        .filter(|de| {
-            let path = de.path();
-            let file_name = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or_default();
-            !file_name.starts_with('.') && file_name.ends_with(".app")
-        })
-        .filter_map(|de| {
-            Some(
-                de.path()
-                    .join("Contents")
-                    .join("MacOS")
-                    .join(de.path().file_name()?.to_str()?.strip_suffix(".app")?),
-            )
-        })
-        .collect()
-}
-
 #[cfg(target_os = "windows")]
 pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
     config
@@ -69,6 +45,40 @@ pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
                     !ignored && lowercase.ends_with(".lnk")
                 })
                 .map(|x| x.path().to_owned())
+        })
+        .collect()
+}
+
+#[cfg(target_os = "macos")]
+pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
+    config
+        .search
+        .shortcut_paths
+        .iter()
+        .map(|path| {
+            walkdir::WalkDir::new(Path::new(
+                shellexpand::env(&path)
+                    .expect("couldn't get shortcut path")
+                    .as_ref(),
+            ))
+            // arbitrary limit to prevent long load times with apps that store stuff incorrectly
+            // (looking at you unity)
+            .max_depth(5)
+        })
+        .flat_map(|shortcuts_dir| {
+            shortcuts_dir
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|de| {
+                    let path = de.path();
+                    let file_name = path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or_default();
+
+                    !file_name.starts_with('.') && file_name.ends_with(".app")
+                })
+                .map(|de| de.path().to_path_buf())
         })
         .collect()
 }
