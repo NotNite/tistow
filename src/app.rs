@@ -141,7 +141,7 @@ impl eframe::App for App {
                         return;
                     }
 
-                    if self.input.trim() == "anything" {
+                    if self.input.trim() == "anything" && results.is_empty() {
                         scroll_ui.label("...uh, not like that");
                     }
 
