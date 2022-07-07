@@ -3,7 +3,7 @@ name = "tistow"
 description = "The Informational Search Tool on Windows"
 authors = ["NotNite"]
 license = "MIT"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,6 +12,7 @@ edition = "2021"
 serde = { version = "1.0.138", features = ["derive"] }
 toml = "0.5.9"
 figment = { version = "0.10", features = ["toml"] }
+directories = "4.0.1"
 shellexpand = "2.1"
 
 egui = { path = "./egui/egui" }

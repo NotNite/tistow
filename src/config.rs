@@ -1,12 +1,10 @@
+use directories::ProjectDirs;
 use figment::{
     providers::{Format, Serialized, Toml},
     Figment,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    fs::{self, File},
-    path::Path,
-};
+use std::fs::{self, File};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Window {
@@ -69,25 +67,27 @@ pub struct Config {
 
 pub fn get_config() -> Config {
     // make dir
-    let appdata_env = std::env::var("AppData").expect("couldn't get AppData");
-    let appdata = Path::new(&appdata_env);
-    fs::create_dir_all(appdata.join("tistow")).expect("couldn't create config dir");
+    let project_dir = ProjectDirs::from("", "", "tistow").expect("couldn't get project dir");
+    let config_dir = project_dir.config_dir();
+
+    println!("{:#?}", config_dir);
+    fs::create_dir_all(config_dir).expect("couldn't create config dir");
 
     // create file if it doesn't exist
-    let path = appdata.join("tistow").join("config.toml");
-    if !path.exists() {
-        File::create(&path).expect("couldn't create config");
+    let config_path = config_dir.join("config.toml");
+    if !config_path.exists() {
+        File::create(&config_path).expect("couldn't create config");
     }
 
     // read config
     let config: Config = Figment::from(Serialized::defaults(Config::default()))
-        .merge(Toml::file(&path))
+        .merge(Toml::file(&config_path))
         .extract()
         .expect("couldn't load config");
 
     // write config
     fs::write(
-        &path,
+        &config_path,
         toml::to_string(&config).expect("couldn't save config"),
     )
     .expect("couldn't save config");
