@@ -49,7 +49,7 @@ impl Default for Search {
         Self {
             shortcut_paths: vec![
                 "/Applications".to_string(),
-                //"${HOME}/Applications".to_string(),
+                "${HOME}/Applications".to_string(),
             ],
             ignore_paths: vec![],
         }
