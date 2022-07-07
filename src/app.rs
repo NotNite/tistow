@@ -1,33 +1,24 @@
+use std::sync;
+
 use anyhow::Context;
 use arboard::Clipboard;
-use device_query::DeviceState;
 use egui::Key;
 
 use crate::search::{ResultAction, Search, SearchResult};
-use crate::util::is_hotkey_pressed;
 
-pub struct App {
+#[derive(Clone, Copy, Debug)]
+pub enum HotkeyEvent {
+    Open,
+}
+
+#[derive(Default, Clone, Debug)]
+struct Opened {
     input: String,
-    device_state: DeviceState,
-    aggregator: Search,
-
     focused: Option<usize>,
     items: usize,
 }
-
-impl App {
-    pub fn new(aggregator: Search) -> Self {
-        Self {
-            input: String::default(),
-            device_state: DeviceState::new(),
-            aggregator,
-
-            focused: None,
-            items: 5,
-        }
-    }
-
-    fn cycle_focus(&mut self) {
+impl Opened {
+    pub fn cycle_focus(&mut self) {
         self.focused = match self.focused {
             Some(n) => {
                 if n + 1 == self.items {
@@ -39,8 +30,37 @@ impl App {
             None => Some(0),
         }
     }
+}
 
-    fn handle_select(&mut self, selection: &SearchResult) -> anyhow::Result<bool> {
+#[derive(Clone, Debug)]
+enum AppState {
+    First,
+    Unopened,
+    Opened(Opened),
+}
+
+pub struct App {
+    aggregator: Search,
+    state: AppState,
+    _hotkey_thread: std::thread::JoinHandle<()>,
+    events_rx: sync::mpsc::Receiver<HotkeyEvent>,
+}
+
+impl App {
+    pub fn new(
+        aggregator: Search,
+        hotkey_thread: std::thread::JoinHandle<()>,
+        events_rx: sync::mpsc::Receiver<HotkeyEvent>,
+    ) -> Self {
+        Self {
+            aggregator,
+            state: AppState::First,
+            _hotkey_thread: hotkey_thread,
+            events_rx,
+        }
+    }
+
+    fn handle_select(selection: &SearchResult) -> anyhow::Result<bool> {
         println!("select: {}", selection.text);
         let action = match &selection.action {
             Some(action) => action,
@@ -61,12 +81,100 @@ impl App {
                 false
             }
         };
-
-        if should_close {
-            self.input = String::default();
-            self.focused = None;
-        }
         Ok(should_close)
+    }
+
+    fn get_new_state(&self, ctx: &egui::Context) -> anyhow::Result<AppState> {
+        match &self.state {
+            AppState::First => Ok(AppState::Unopened),
+            AppState::Unopened => Ok(AppState::Unopened),
+            AppState::Opened(opened) => {
+                let mut opened = opened.clone();
+                let results = self.aggregator.search(&opened.input);
+                opened.items = results.len();
+
+                //println!("{}", self.focused);
+
+                if ctx.input().key_pressed(egui::Key::Tab) {
+                    opened.cycle_focus();
+                }
+
+                if ctx.input().key_released(Key::Escape) {
+                    return Ok(AppState::Unopened);
+                }
+
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| {
+                        let input_widget = egui::TextEdit::singleline(&mut opened.input)
+                            .hint_text("search anything...")
+                            .lock_focus(true);
+                        let input_res = ui.add_sized((ui.available_width(), 18_f32), input_widget);
+
+                        if ui.input().key_pressed(egui::Key::Enter) && !results.is_empty() {
+                            let result = if input_res.lost_focus() {
+                                // user presses enter in the input field (select first input)
+                                Some(&results[0])
+                            } else if opened.focused.is_some() {
+                                // user selects option manually
+                                Some(&results[opened.focused.unwrap()])
+                            } else {
+                                None
+                            };
+
+                            if let Some(result) = result {
+                                if Self::handle_select(result)? {
+                                    return Ok(AppState::Unopened);
+                                }
+                            }
+                        }
+
+                        if opened.focused.is_none() {
+                            input_res.request_focus();
+                        }
+
+                        ui.separator();
+
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .min_scrolled_width(ui.available_width())
+                            .show(ui, |scroll_ui| {
+                                if opened.input.is_empty() {
+                                    return Ok(());
+                                }
+
+                                for (pos, result) in results.iter().enumerate() {
+                                    let label_res = scroll_ui.selectable_label(false, &result.text);
+                                    label_res.enabled();
+                                    //label_res.request_focus();
+
+                                    if opened.focused == Some(pos) {
+                                        label_res.request_focus();
+                                        label_res.scroll_to_me(None);
+                                    }
+                                }
+
+                                anyhow::Ok(())
+                            })
+                            .inner?;
+
+                        Ok(AppState::Opened(opened))
+                    })
+                    .inner
+            }
+        }
+    }
+
+    fn set_state(&mut self, state: AppState, frame: &mut eframe::Frame) {
+        self.state = state;
+        match &self.state {
+            AppState::First => panic!("should never enter first state"),
+            AppState::Unopened => {
+                frame.set_visibility(false);
+            }
+            AppState::Opened(_) => {
+                frame.set_visibility(true);
+            }
+        }
     }
 }
 
@@ -76,82 +184,12 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let results = self.aggregator.search(&self.input);
-        self.items = results.len();
-
-        //println!("{}", self.focused);
-
-        if ctx.input().key_pressed(egui::Key::Tab) {
-            self.cycle_focus();
+        let events: Vec<_> = self.events_rx.try_iter().collect();
+        for event in events {
+            match event {
+                HotkeyEvent::Open => self.set_state(AppState::Opened(Opened::default()), frame),
+            }
         }
-
-        if ctx.input().key_down(Key::Escape) {
-            frame.set_visibility(false);
-        }
-
-        // global hotkeys
-        if is_hotkey_pressed(&self.device_state) {
-            self.input = String::default();
-            self.focused = None;
-            frame.set_visibility(true);
-        }
-
-        egui::CentralPanel::default()
-            .show(ctx, |ui| {
-                let input_widget = egui::TextEdit::singleline(&mut self.input)
-                    .hint_text("search anything...")
-                    .lock_focus(true);
-                let input_res = ui.add_sized((ui.available_width(), 18_f32), input_widget);
-
-                if ui.input().key_pressed(egui::Key::Enter) && !results.is_empty() {
-                    let result = if input_res.lost_focus() {
-                        // user presses enter in the input field (select first input)
-                        Some(&results[0])
-                    } else if self.focused.is_some() {
-                        // user selects option manually
-                        Some(&results[self.focused.unwrap()])
-                    } else {
-                        None
-                    };
-
-                    if let Some(result) = result {
-                        let should_close = self.handle_select(result)?;
-                        if should_close {
-                            frame.set_visibility(false);
-                        }
-                    }
-                }
-
-                if self.focused.is_none() {
-                    input_res.request_focus();
-                }
-
-                ui.separator();
-
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .min_scrolled_width(ui.available_width())
-                    .show(ui, |scroll_ui| {
-                        if self.input.is_empty() {
-                            return Ok(());
-                        }
-
-                        for (pos, result) in results.iter().enumerate() {
-                            let label_res = scroll_ui.selectable_label(false, &result.text);
-                            label_res.enabled();
-                            //label_res.request_focus();
-
-                            if self.focused == pos.try_into()? {
-                                label_res.request_focus();
-                                label_res.scroll_to_me(None);
-                            }
-                        }
-
-                        anyhow::Ok(())
-                    })
-                    .inner
-            })
-            .inner
-            .unwrap();
+        self.set_state(self.get_new_state(ctx).unwrap(), frame);
     }
 }
