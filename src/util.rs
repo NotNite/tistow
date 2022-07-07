@@ -1,4 +1,7 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use crate::config::Config;
 use device_query::{DeviceQuery, DeviceState, Keycode};
@@ -34,8 +37,6 @@ pub fn get_shortcuts(_config: &Config) -> Vec<PathBuf> {
 
 #[cfg(target_os = "windows")]
 pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
-    use std::path::Path;
-
     config
         .search
         .shortcut_paths
