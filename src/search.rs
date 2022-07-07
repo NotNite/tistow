@@ -30,7 +30,7 @@ impl Search {
         }
     }
 
-    pub fn search(&mut self, input: &str) -> Vec<SearchResult> {
+    pub fn search(&self, input: &str) -> Vec<SearchResult> {
         if input.is_empty() {
             return vec![];
         }
@@ -48,7 +48,7 @@ impl Search {
         }
     }
 
-    fn mode_calculator(&mut self, input: &str) -> Vec<SearchResult> {
+    fn mode_calculator(&self, input: &str) -> Vec<SearchResult> {
         let r = meval::eval_str(input.trim());
 
         let res = if let Ok(n) = r {
@@ -64,7 +64,7 @@ impl Search {
         }]
     }
 
-    fn mode_search(&mut self, input: &str) -> Vec<SearchResult> {
+    fn mode_search(&self, input: &str) -> Vec<SearchResult> {
         get_shortcuts()
             .into_iter()
             .filter_map(|path| {
