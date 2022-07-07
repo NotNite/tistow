@@ -66,7 +66,11 @@ impl Search {
 
         for option in options {
             let name = option.file_stem().unwrap().to_str().unwrap();
-            if self.matcher.fuzzy_match(name, input).is_some() {
+            if self
+                .matcher
+                .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
+                .is_some()
+            {
                 results.push(SearchResult {
                     mode: SearchMode::Search,
                     text: name.to_string(),
