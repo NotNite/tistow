@@ -4,7 +4,9 @@ use anyhow::Context;
 use arboard::Clipboard;
 use egui::Key;
 
+use crate::config::Config;
 use crate::search::{ResultAction, Search, SearchResult};
+use crate::util::get_shortcuts;
 
 #[derive(Clone, Copy, Debug)]
 pub enum HotkeyEvent {
@@ -40,21 +42,26 @@ enum AppState {
 }
 
 pub struct App {
-    aggregator: Search,
+    search: Search,
     state: AppState,
     _hotkey_thread: std::thread::JoinHandle<()>,
     events_rx: sync::mpsc::Receiver<HotkeyEvent>,
+    _config: Config,
 }
 
 impl App {
-    pub fn new(aggregator: Search, ctx: egui::Context) -> Self {
+    pub fn new(ctx: egui::Context, config: Config) -> Self {
+        let shortcuts = get_shortcuts(&config);
+        let search = Search::new(shortcuts);
+
         let (events_tx, events_rx) = sync::mpsc::channel();
         let hotkey_thread = std::thread::spawn({
+            let config = config.clone();
             move || {
                 let device_state = device_query::DeviceState::new();
                 loop {
                     // global hotkeys
-                    if crate::util::is_hotkey_pressed(&device_state) {
+                    if crate::util::is_hotkey_pressed(&device_state, &config.general.hotkey) {
                         events_tx.send(HotkeyEvent::Open).unwrap();
                         ctx.request_repaint();
                     }
@@ -65,10 +72,11 @@ impl App {
         });
 
         Self {
-            aggregator,
+            search,
             state: AppState::First,
             _hotkey_thread: hotkey_thread,
             events_rx,
+            _config: config,
         }
     }
 
@@ -106,7 +114,7 @@ impl App {
 
     fn process_opened(&self, opened: &Opened, ctx: &egui::Context) -> anyhow::Result<AppState> {
         let mut opened = opened.clone();
-        let results = self.aggregator.search(&opened.input);
+        let results = self.search.search(&opened.input);
         opened.items = results.len();
 
         //println!("{}", self.focused);
@@ -156,30 +164,39 @@ impl App {
 
         ui.separator();
 
-        egui::ScrollArea::vertical()
+        let inner = egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .min_scrolled_width(ui.available_width())
             .show(ui, |scroll_ui| {
                 if opened.input.is_empty() {
-                    return Ok(());
+                    return Ok(None);
+                }
+
+                if opened.input.trim() == "anything" && results.is_empty() {
+                    scroll_ui.label("...uh, not like that");
                 }
 
                 for (pos, result) in results.iter().enumerate() {
                     let label_res = scroll_ui.selectable_label(false, &result.text);
-                    label_res.enabled();
-                    //label_res.request_focus();
 
                     if opened.focused == Some(pos) {
                         label_res.request_focus();
                         label_res.scroll_to_me(None);
                     }
+
+                    if label_res.clicked() {
+                        let should_close = Self::handle_select(result)?;
+                        if should_close {
+                            return Ok(Some(AppState::Unopened));
+                        }
+                    }
                 }
 
-                anyhow::Ok(())
+                anyhow::Ok(None)
             })
             .inner?;
 
-        Ok(AppState::Opened(opened))
+        Ok(inner.unwrap_or_else(|| AppState::Opened(opened)))
     }
 
     fn set_state(&mut self, state: AppState, frame: &mut eframe::Frame) {

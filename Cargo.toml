@@ -2,18 +2,24 @@
 name = "tistow"
 description = "The Informational Search Tool on Windows"
 authors = ["NotNite"]
-version = "0.1.2"
+license = "MIT"
+version = "0.1.6"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+serde = { version = "1.0.138", features = ["derive"] }
+toml = "0.5.9"
+figment = { version = "0.10", features = ["toml"] }
+directories = "4.0.1"
+shellexpand = "2.1"
+
 egui = { path = "./egui/egui" }
 eframe = { path = "./egui/eframe" }
 glutin = "0.28.0"
 glow = "0.11.2"
 
-clap = { version = "3.2.8", features = ["derive"] }
 device_query = "1.1.1"
 
 fuzzy-matcher = "0.3.7"

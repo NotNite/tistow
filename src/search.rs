@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use crate::util::get_shortcuts;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 
 pub enum SearchMode {
@@ -21,12 +20,14 @@ pub enum ResultAction {
 
 pub struct Search {
     matcher: SkimMatcherV2,
+    shortcuts: Vec<PathBuf>,
 }
 
 impl Search {
-    pub fn new() -> Self {
+    pub fn new(shortcuts: Vec<PathBuf>) -> Self {
         Self {
             matcher: SkimMatcherV2::default(),
+            shortcuts,
         }
     }
 
@@ -65,8 +66,9 @@ impl Search {
     }
 
     fn mode_search(&self, input: &str) -> Vec<SearchResult> {
-        get_shortcuts()
-            .into_iter()
+        self.shortcuts
+            .iter()
+            .cloned()
             .filter_map(|path| {
                 let name = path.file_stem()?.to_str()?.to_string();
 

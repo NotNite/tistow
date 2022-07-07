@@ -1,49 +1,16 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
+use crate::config::Config;
 use device_query::{DeviceQuery, DeviceState, Keycode};
 
-pub fn is_hotkey_pressed(device_state: &DeviceState) -> bool {
-    HashSet::<Keycode>::from_iter(device_state.get_keys()).is_superset(&HashSet::from_iter([
-        Keycode::LControl,
-        Keycode::LAlt,
-        Keycode::Backspace,
-    ]))
-}
-
-#[cfg(target_os = "windows")]
-pub fn get_shortcuts() -> Vec<PathBuf> {
-    use std::path::Path;
-    use walkdir::WalkDir;
-
-    fn walkdir_to_vec(walkdir: WalkDir) -> Vec<PathBuf> {
-        walkdir
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter(|x| x.path().extension().map(|e| e == "lnk").unwrap_or_default())
-            .map(|x| x.path().to_owned())
-            .collect()
-    }
-
-    Iterator::chain(
-        walkdir_to_vec(WalkDir::new(
-            Path::new(&std::env::var("AppData").unwrap())
-                .join("Microsoft")
-                .join("Windows")
-                .join("Start Menu"),
-        ))
-        .into_iter(),
-        walkdir_to_vec(WalkDir::new(
-            Path::new(&std::env::var("ProgramData").unwrap())
-                .join("Microsoft")
-                .join("Windows"),
-        ))
-        .into_iter(),
-    )
-    .collect()
+pub fn is_hotkey_pressed(device_state: &DeviceState, hotkey_str: &[String]) -> bool {
+    HashSet::<Keycode>::from_iter(device_state.get_keys()).is_superset(&HashSet::from_iter(
+        hotkey_str.iter().map(|k| Keycode::from_str(k).unwrap()),
+    ))
 }
 
 #[cfg(target_os = "macos")]
-pub fn get_shortcuts() -> Vec<PathBuf> {
+pub fn get_shortcuts(_config: &Config) -> Vec<PathBuf> {
     std::fs::read_dir("/Applications")
         .unwrap()
         .filter_map(Result::ok)
@@ -62,6 +29,46 @@ pub fn get_shortcuts() -> Vec<PathBuf> {
                     .join("MacOS")
                     .join(de.path().file_name()?.to_str()?.strip_suffix(".app")?),
             )
+        })
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
+pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
+    use std::path::Path;
+
+    config
+        .search
+        .shortcut_paths
+        .iter()
+        .map(|path| {
+            walkdir::WalkDir::new(Path::new(
+                shellexpand::env(&path)
+                    .expect("couldn't get shortcut path")
+                    .as_ref(),
+            ))
+        })
+        .flat_map(|shortcuts_dir| {
+            shortcuts_dir
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|x| {
+                    let path = x.path().to_str().unwrap();
+                    let lowercase = path.to_lowercase();
+                    let ignored = config
+                        .search
+                        .ignore_paths
+                        .iter()
+                        .map(|ignore_str| {
+                            shellexpand::env(&ignore_str)
+                                .expect("couldn't get shortcut ignore dir")
+                                .to_lowercase()
+                        })
+                        .any(|ignore_dir| lowercase.contains(&ignore_dir));
+
+                    !ignored && lowercase.ends_with(".lnk")
+                })
+                .map(|x| x.path().to_owned())
         })
         .collect()
 }
