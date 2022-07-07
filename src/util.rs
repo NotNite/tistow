@@ -42,7 +42,7 @@ pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
                         })
                         .any(|ignore_dir| lowercase.contains(&ignore_dir));
 
-                    !ignored && lowercase.ends_with(".lnk")
+                    !ignored && (lowercase.ends_with(".lnk") || lowercase.ends_with(".url"))
                 })
                 .map(|x| x.path().to_owned())
         })
