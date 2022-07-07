@@ -70,7 +70,6 @@ pub fn get_config() -> Config {
     let project_dir = ProjectDirs::from("", "", "tistow").expect("couldn't get project dir");
     let config_dir = project_dir.config_dir();
 
-    println!("{:#?}", config_dir);
     fs::create_dir_all(config_dir).expect("couldn't create config dir");
 
     // create file if it doesn't exist

@@ -141,10 +141,12 @@ impl eframe::App for App {
                         return;
                     }
 
+                    if self.input.trim() == "anything" {
+                        scroll_ui.label("...uh, not like that");
+                    }
+
                     for (pos, result) in results.iter().enumerate() {
                         let label_res = scroll_ui.selectable_label(false, &result.text);
-                        label_res.enabled();
-                        //label_res.request_focus();
 
                         if self.focused == pos.try_into().unwrap() {
                             label_res.request_focus();
