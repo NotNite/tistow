@@ -53,7 +53,7 @@ pub struct App {
 impl App {
     pub fn new(ctx: egui::Context, config: Config) -> Self {
         let shortcuts = get_shortcuts(&config);
-        let search = Search::new(shortcuts);
+        let search = Search::new(shortcuts, config.search.aliases.clone());
 
         let (events_tx, events_rx) = sync::mpsc::channel();
         let hotkey_thread = std::thread::spawn({

@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-
+use figment::value::Map;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use std::path::PathBuf;
 
 pub enum SearchMode {
     Search,
@@ -21,13 +21,15 @@ pub enum ResultAction {
 pub struct Search {
     matcher: SkimMatcherV2,
     shortcuts: Vec<PathBuf>,
+    aliases: Map<String, String>,
 }
 
 impl Search {
-    pub fn new(shortcuts: Vec<PathBuf>) -> Self {
+    pub fn new(shortcuts: Vec<PathBuf>, aliases: Map<String, String>) -> Self {
         Self {
             matcher: SkimMatcherV2::default(),
             shortcuts,
+            aliases,
         }
     }
 
@@ -66,20 +68,34 @@ impl Search {
     }
 
     fn mode_search(&self, input: &str) -> Vec<SearchResult> {
-        self.shortcuts
-            .iter()
-            .cloned()
-            .filter_map(|path| {
-                let name = path.file_stem()?.to_str()?.to_string();
+        let shortcuts = self.shortcuts.iter().cloned();
+        let mut results: Vec<SearchResult> = Vec::new();
 
-                self.matcher
-                    .fuzzy_match(&name, input)
-                    .map(|_| SearchResult {
+        let alias = self.aliases.get(input.trim());
+
+        for path in shortcuts {
+            let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+
+            // aliases
+            if alias.is_some() && name.trim() == alias.unwrap().trim() {
+                results.insert(
+                    0,
+                    SearchResult {
                         mode: SearchMode::Search,
-                        text: name.to_string(),
+                        text: name,
                         action: Some(ResultAction::Open { path }),
-                    })
-            })
-            .collect()
+                    },
+                );
+            // normal
+            } else if self.matcher.fuzzy_match(&name, input).is_some() {
+                results.push(SearchResult {
+                    mode: SearchMode::Search,
+                    text: name.to_string(),
+                    action: Some(ResultAction::Open { path }),
+                })
+            }
+        }
+
+        results
     }
 }

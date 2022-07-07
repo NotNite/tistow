@@ -1,6 +1,7 @@
 use directories::ProjectDirs;
 use figment::{
     providers::{Format, Serialized, Toml},
+    value::Map,
     Figment,
 };
 use serde::{Deserialize, Serialize};
@@ -29,6 +30,7 @@ impl Default for Window {
 pub struct Search {
     pub shortcut_paths: Vec<String>,
     pub ignore_paths: Vec<String>,
+    pub aliases: Map<String, String>,
 }
 
 impl Default for Search {
@@ -42,8 +44,10 @@ impl Default for Search {
             ignore_paths: vec![
                 "${AppData}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup".to_string(),
             ],
+            aliases: Map::new(),
         }
     }
+
     #[cfg(target_os = "macos")]
     fn default() -> Self {
         Self {
@@ -52,6 +56,7 @@ impl Default for Search {
                 "${HOME}/Applications".to_string(),
             ],
             ignore_paths: vec![],
+            aliases: Map::new(),
         }
     }
 }
