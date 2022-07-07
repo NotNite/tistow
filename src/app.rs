@@ -100,80 +100,86 @@ impl App {
         match &self.state {
             AppState::First => Ok(AppState::Unopened),
             AppState::Unopened => Ok(AppState::Unopened),
-            AppState::Opened(opened) => {
-                let mut opened = opened.clone();
-                let results = self.aggregator.search(&opened.input);
-                opened.items = results.len();
+            AppState::Opened(opened) => self.process_opened(opened, ctx),
+        }
+    }
 
-                //println!("{}", self.focused);
+    fn process_opened(&self, opened: &Opened, ctx: &egui::Context) -> anyhow::Result<AppState> {
+        let mut opened = opened.clone();
+        let results = self.aggregator.search(&opened.input);
+        opened.items = results.len();
 
-                if ctx.input().key_pressed(egui::Key::Tab) {
-                    opened.cycle_focus();
-                }
+        //println!("{}", self.focused);
+        if ctx.input().key_pressed(egui::Key::Tab) {
+            opened.cycle_focus();
+        }
+        if ctx.input().key_released(Key::Escape) {
+            return Ok(AppState::Unopened);
+        }
 
-                if ctx.input().key_released(Key::Escape) {
+        egui::CentralPanel::default()
+            .show(ctx, |ui| Self::draw_opened_central(ui, opened, results))
+            .inner
+    }
+
+    fn draw_opened_central(
+        ui: &mut egui::Ui,
+        mut opened: Opened,
+        results: Vec<SearchResult>,
+    ) -> anyhow::Result<AppState> {
+        let input_widget = egui::TextEdit::singleline(&mut opened.input)
+            .hint_text("search anything...")
+            .lock_focus(true);
+        let input_res = ui.add_sized((ui.available_width(), 18_f32), input_widget);
+
+        if ui.input().key_pressed(egui::Key::Enter) && !results.is_empty() {
+            let result = if input_res.lost_focus() {
+                // user presses enter in the input field (select first input)
+                Some(&results[0])
+            } else if opened.focused.is_some() {
+                // user selects option manually
+                Some(&results[opened.focused.unwrap()])
+            } else {
+                None
+            };
+
+            if let Some(result) = result {
+                if Self::handle_select(result)? {
                     return Ok(AppState::Unopened);
                 }
-
-                egui::CentralPanel::default()
-                    .show(ctx, |ui| {
-                        let input_widget = egui::TextEdit::singleline(&mut opened.input)
-                            .hint_text("search anything...")
-                            .lock_focus(true);
-                        let input_res = ui.add_sized((ui.available_width(), 18_f32), input_widget);
-
-                        if ui.input().key_pressed(egui::Key::Enter) && !results.is_empty() {
-                            let result = if input_res.lost_focus() {
-                                // user presses enter in the input field (select first input)
-                                Some(&results[0])
-                            } else if opened.focused.is_some() {
-                                // user selects option manually
-                                Some(&results[opened.focused.unwrap()])
-                            } else {
-                                None
-                            };
-
-                            if let Some(result) = result {
-                                if Self::handle_select(result)? {
-                                    return Ok(AppState::Unopened);
-                                }
-                            }
-                        }
-
-                        if opened.focused.is_none() {
-                            input_res.request_focus();
-                        }
-
-                        ui.separator();
-
-                        egui::ScrollArea::vertical()
-                            .auto_shrink([false, false])
-                            .min_scrolled_width(ui.available_width())
-                            .show(ui, |scroll_ui| {
-                                if opened.input.is_empty() {
-                                    return Ok(());
-                                }
-
-                                for (pos, result) in results.iter().enumerate() {
-                                    let label_res = scroll_ui.selectable_label(false, &result.text);
-                                    label_res.enabled();
-                                    //label_res.request_focus();
-
-                                    if opened.focused == Some(pos) {
-                                        label_res.request_focus();
-                                        label_res.scroll_to_me(None);
-                                    }
-                                }
-
-                                anyhow::Ok(())
-                            })
-                            .inner?;
-
-                        Ok(AppState::Opened(opened))
-                    })
-                    .inner
             }
         }
+
+        if opened.focused.is_none() {
+            input_res.request_focus();
+        }
+
+        ui.separator();
+
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .min_scrolled_width(ui.available_width())
+            .show(ui, |scroll_ui| {
+                if opened.input.is_empty() {
+                    return Ok(());
+                }
+
+                for (pos, result) in results.iter().enumerate() {
+                    let label_res = scroll_ui.selectable_label(false, &result.text);
+                    label_res.enabled();
+                    //label_res.request_focus();
+
+                    if opened.focused == Some(pos) {
+                        label_res.request_focus();
+                        label_res.scroll_to_me(None);
+                    }
+                }
+
+                anyhow::Ok(())
+            })
+            .inner?;
+
+        Ok(AppState::Opened(opened))
     }
 
     fn set_state(&mut self, state: AppState, frame: &mut eframe::Frame) {
