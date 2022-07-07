@@ -3,7 +3,7 @@ name = "tistow"
 description = "The Informational Search Tool on Windows"
 authors = ["NotNite"]
 license = "MIT"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -21,10 +21,10 @@ glutin = "0.28.0"
 glow = "0.11.2"
 
 device_query = "1.1.1"
+anyhow = "1.0.58"
 
 fuzzy-matcher = "0.3.7"
 meval = "0.2"
 walkdir = "2"
 arboard = "2.1.1"
 open = "3.0.1"
-anyhow = "1.0.58"

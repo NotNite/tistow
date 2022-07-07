@@ -204,7 +204,7 @@ impl App {
             })
             .inner?;
 
-        Ok(inner.unwrap_or_else(|| AppState::Opened(opened)))
+        Ok(inner.unwrap_or(AppState::Opened(opened)))
     }
 
     fn set_state(&mut self, state: AppState, frame: &mut eframe::Frame) {
