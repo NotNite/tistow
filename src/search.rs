@@ -87,7 +87,11 @@ impl Search {
                     },
                 );
             // normal
-            } else if self.matcher.fuzzy_match(&name, input).is_some() {
+            } else if self
+                .matcher
+                .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
+                .is_some()
+            {
                 results.push(SearchResult {
                     mode: SearchMode::Search,
                     text: name.to_string(),
