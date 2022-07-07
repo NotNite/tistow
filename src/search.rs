@@ -75,28 +75,35 @@ impl Search {
 
         for path in shortcuts {
             let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+            let alias_matches = alias.is_some() && name.trim() == alias.unwrap().trim();
+            let exact_match = name.trim().to_lowercase() == input.trim().to_lowercase();
 
-            // aliases
-            if alias.is_some() && name.trim() == alias.unwrap().trim() {
-                results.insert(
-                    0,
-                    SearchResult {
+            let already_added = results.iter().any(|r| r.text == name);
+
+            if !already_added {
+                // prioritize exact/alias matches
+                if alias_matches || exact_match {
+                    results.insert(
+                        0,
+                        SearchResult {
+                            mode: SearchMode::Search,
+                            text: name.clone(),
+                            action: Some(ResultAction::Open { path }),
+                        },
+                    );
+
+                // normal
+                } else if self
+                    .matcher
+                    .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
+                    .is_some()
+                {
+                    results.push(SearchResult {
                         mode: SearchMode::Search,
-                        text: name,
+                        text: name.clone(),
                         action: Some(ResultAction::Open { path }),
-                    },
-                );
-            // normal
-            } else if self
-                .matcher
-                .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
-                .is_some()
-            {
-                results.push(SearchResult {
-                    mode: SearchMode::Search,
-                    text: name.to_string(),
-                    action: Some(ResultAction::Open { path }),
-                })
+                    });
+                }
             }
         }
 
