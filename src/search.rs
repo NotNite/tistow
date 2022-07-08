@@ -1,4 +1,3 @@
-#![allow(clippy::if_same_then_else)]
 use figment::value::Map;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use std::path::PathBuf;
@@ -23,6 +22,19 @@ pub struct Search {
     matcher: SkimMatcherV2,
     shortcuts: Vec<PathBuf>,
     aliases: Map<String, String>,
+}
+
+struct KeyMatch {
+    path: PathBuf,
+    kind: Option<MatchKind>,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
+enum MatchKind {
+    Alias,
+    Exact,
+    StartsWith,
+    Fuzzy,
 }
 
 impl Search {
@@ -69,97 +81,70 @@ impl Search {
     }
 
     fn mode_search(&self, input: &str) -> Vec<SearchResult> {
-        let shortcuts = self.shortcuts.iter().cloned();
-        let mut results: Vec<SearchResult> = Vec::new();
-
         let alias = self.aliases.get(input.trim());
-        let mut idx = 0;
 
-        // this is really cursed but i can't figure out a good way to sort this
+        let shortcuts = self.shortcuts.clone();
+        let shortcuts: Vec<Option<&PathBuf>> = shortcuts.iter().map(Some).collect();
+
         // we need to prioritize, in order:
         // - aliases
         // - exact matches
         // - starts with input
         // - everything else
+        let mut available_shortcuts: Vec<KeyMatch> = shortcuts
+            .iter()
+            .map(|path| {
+                let path = path.unwrap().to_path_buf();
+                let name = path.file_stem().unwrap().to_str().unwrap().to_string();
 
-        // aliases
-        for path in shortcuts.clone() {
-            let name = path.file_stem().unwrap().to_str().unwrap().to_string();
-            let alias_matches = alias.is_some() && name.trim() == alias.unwrap().trim();
-            let already_added = results.iter().any(|r| r.text == name);
-
-            if alias_matches && !already_added {
-                results.insert(
-                    idx,
-                    SearchResult {
-                        mode: SearchMode::Search,
-                        text: name.clone(),
-                        action: Some(ResultAction::Open { path }),
-                    },
-                );
-                idx += 1;
-            }
-        }
-
-        // exact matches
-        for path in shortcuts.clone() {
-            let name = path.file_stem().unwrap().to_str().unwrap().to_string();
-            let exact_match = name.trim().to_lowercase() == input.trim().to_lowercase();
-            let already_added = results.iter().any(|r| r.text == name);
-
-            if exact_match && !already_added {
-                results.insert(
-                    idx,
-                    SearchResult {
-                        mode: SearchMode::Search,
-                        text: name.clone(),
-                        action: Some(ResultAction::Open { path }),
-                    },
-                );
-                idx += 1;
-            }
-        }
-
-        // starts with
-        for path in shortcuts.clone() {
-            let name = path.file_stem().unwrap().to_str().unwrap().to_string();
-            let starts_with = name
-                .trim()
-                .to_lowercase()
-                .starts_with(&input.trim().to_lowercase());
-            let already_added = results.iter().any(|r| r.text == name);
-
-            if starts_with && !already_added {
-                results.insert(
-                    idx,
-                    SearchResult {
-                        mode: SearchMode::Search,
-                        text: name.clone(),
-                        action: Some(ResultAction::Open { path }),
-                    },
-                );
-                idx += 1;
-            }
-        }
-
-        // everything else
-        for path in shortcuts.clone() {
-            let name = path.file_stem().unwrap().to_str().unwrap().to_string();
-            let already_added = results.iter().any(|r| r.text == name);
-
-            if !already_added
-                && self
+                let alias_matches = alias.is_some() && name.trim() == alias.unwrap().trim();
+                let exact_match = name.trim().to_lowercase() == input.trim().to_lowercase();
+                let starts_with = name
+                    .trim()
+                    .to_lowercase()
+                    .starts_with(&input.trim().to_lowercase());
+                let fuzzy = self
                     .matcher
                     .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
-                    .is_some()
-            {
-                results.push(SearchResult {
+                    .is_some();
+
+                let match_kind = if alias_matches {
+                    Some(MatchKind::Alias)
+                } else if exact_match {
+                    Some(MatchKind::Exact)
+                } else if starts_with {
+                    Some(MatchKind::StartsWith)
+                } else if fuzzy {
+                    Some(MatchKind::Fuzzy)
+                } else {
+                    None
+                };
+
+                KeyMatch {
+                    path,
+                    kind: match_kind,
+                }
+            })
+            .filter(|x| x.kind.is_some())
+            .collect();
+
+        available_shortcuts.sort_by_cached_key(|x| x.kind);
+
+        let results = available_shortcuts
+            .iter()
+            .map(|k| {
+                let path = &k.path;
+                let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+
+                SearchResult {
                     mode: SearchMode::Search,
-                    text: name.clone(),
-                    action: Some(ResultAction::Open { path }),
-                });
-            }
-        }
+                    text: name,
+                    action: Some(ResultAction::Open {
+                        path: path.to_owned(),
+                    }),
+                }
+            })
+            .collect();
 
         results
     }
