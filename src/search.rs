@@ -1,3 +1,4 @@
+#![allow(clippy::if_same_then_else)]
 use figment::value::Map;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use std::path::PathBuf;
@@ -72,38 +73,91 @@ impl Search {
         let mut results: Vec<SearchResult> = Vec::new();
 
         let alias = self.aliases.get(input.trim());
+        let mut idx = 0;
 
-        for path in shortcuts {
+        // this is really cursed but i can't figure out a good way to sort this
+        // we need to prioritize, in order:
+        // - aliases
+        // - exact matches
+        // - starts with input
+        // - everything else
+
+        // aliases
+        for path in shortcuts.clone() {
             let name = path.file_stem().unwrap().to_str().unwrap().to_string();
             let alias_matches = alias.is_some() && name.trim() == alias.unwrap().trim();
-            let exact_match = name.trim().to_lowercase() == input.trim().to_lowercase();
-
             let already_added = results.iter().any(|r| r.text == name);
 
-            if !already_added {
-                // prioritize exact/alias matches
-                if alias_matches || exact_match {
-                    results.insert(
-                        0,
-                        SearchResult {
-                            mode: SearchMode::Search,
-                            text: name.clone(),
-                            action: Some(ResultAction::Open { path }),
-                        },
-                    );
-
-                // normal
-                } else if self
-                    .matcher
-                    .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
-                    .is_some()
-                {
-                    results.push(SearchResult {
+            if alias_matches && !already_added {
+                results.insert(
+                    idx,
+                    SearchResult {
                         mode: SearchMode::Search,
                         text: name.clone(),
                         action: Some(ResultAction::Open { path }),
-                    });
-                }
+                    },
+                );
+                idx += 1;
+            }
+        }
+
+        // exact matches
+        for path in shortcuts.clone() {
+            let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+            let exact_match = name.trim().to_lowercase() == input.trim().to_lowercase();
+            let already_added = results.iter().any(|r| r.text == name);
+
+            if exact_match && !already_added {
+                results.insert(
+                    idx,
+                    SearchResult {
+                        mode: SearchMode::Search,
+                        text: name.clone(),
+                        action: Some(ResultAction::Open { path }),
+                    },
+                );
+                idx += 1;
+            }
+        }
+
+        // starts with
+        for path in shortcuts.clone() {
+            let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+            let starts_with = name
+                .trim()
+                .to_lowercase()
+                .starts_with(&input.trim().to_lowercase());
+            let already_added = results.iter().any(|r| r.text == name);
+
+            if starts_with && !already_added {
+                results.insert(
+                    idx,
+                    SearchResult {
+                        mode: SearchMode::Search,
+                        text: name.clone(),
+                        action: Some(ResultAction::Open { path }),
+                    },
+                );
+                idx += 1;
+            }
+        }
+
+        // everything else
+        for path in shortcuts.clone() {
+            let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+            let already_added = results.iter().any(|r| r.text == name);
+
+            if !already_added
+                && self
+                    .matcher
+                    .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
+                    .is_some()
+            {
+                results.push(SearchResult {
+                    mode: SearchMode::Search,
+                    text: name.clone(),
+                    action: Some(ResultAction::Open { path }),
+                });
             }
         }
 
