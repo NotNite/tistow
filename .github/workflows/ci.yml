@@ -61,7 +61,7 @@ jobs:
           override: true
       - name: Release build
         run: cargo build --release
-      - name: Upload Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: macos
