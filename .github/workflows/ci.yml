@@ -23,7 +23,7 @@ jobs:
           command: clippy
           args: -- -D warnings
 
- build-windows:
+  build-windows:
     name: Release builds for Windows
     runs-on: windows-latest
     steps:
@@ -41,7 +41,7 @@ jobs:
           name: windows
           path: target/release/tistow.exe
 
- build-macos:
+  build-macos:
     name: Release builds for macOS
     runs-on: macos-latest
     steps:
