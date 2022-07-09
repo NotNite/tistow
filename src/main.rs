@@ -8,6 +8,7 @@ mod config;
 mod search;
 mod util;
 
+#[cfg(target_os = "windows")]
 fn fix_stdout() {
     use windows::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
 
