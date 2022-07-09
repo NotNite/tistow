@@ -1,9 +1,9 @@
 use std::str::FromStr;
-use std::{fs, sync};
+use std::sync;
 
 use anyhow::Context;
 use arboard::Clipboard;
-use egui::{FontData, FontDefinitions, FontFamily, Key};
+use egui::Key;
 
 use crate::config::Config;
 use crate::search::{ResultAction, Search, SearchResult};
@@ -52,28 +52,6 @@ pub struct App {
 
 impl App {
     pub fn new(ctx: egui::Context, config: Config) -> Self {
-        if let Some(font_path) = &config.style.custom_font {
-            let mut fonts = FontDefinitions::default();
-
-            fonts.font_data.insert(
-                "custom_font".to_owned(),
-                FontData::from_owned(fs::read(font_path).unwrap()),
-            );
-
-            fonts
-                .families
-                .get_mut(&FontFamily::Proportional)
-                .unwrap()
-                .insert(0, "custom_font".to_owned());
-            fonts
-                .families
-                .get_mut(&FontFamily::Monospace)
-                .unwrap()
-                .push("custom_font".to_owned());
-
-            ctx.set_fonts(fonts);
-        }
-
         let shortcuts = get_shortcuts(&config);
         let search = Search::new(shortcuts, config.search.aliases.clone());
 

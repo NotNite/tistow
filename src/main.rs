@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::fs;
+
 use eframe::egui;
-use egui::{Pos2, Vec2};
+use egui::{FontData, FontDefinitions, FontFamily, Pos2, Vec2};
 
 mod app;
 mod config;
@@ -43,6 +45,28 @@ fn main() {
         },
         Box::new(|cc| {
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
+
+            if let Some(font_path) = &config.style.custom_font {
+                let mut fonts = FontDefinitions::default();
+
+                fonts.font_data.insert(
+                    "custom_font".to_owned(),
+                    FontData::from_owned(fs::read(font_path).unwrap()),
+                );
+
+                fonts
+                    .families
+                    .get_mut(&FontFamily::Proportional)
+                    .unwrap()
+                    .insert(0, "custom_font".to_owned());
+                fonts
+                    .families
+                    .get_mut(&FontFamily::Monospace)
+                    .unwrap()
+                    .push("custom_font".to_owned());
+
+                cc.egui_ctx.set_fonts(fonts);
+            }
 
             Box::new(app::App::new(cc.egui_ctx.clone(), config))
         }),
