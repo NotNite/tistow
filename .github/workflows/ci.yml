@@ -8,17 +8,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: nightly
           override: true
           components: rustfmt, clippy
-      - uses: actions-rs/cargo@v1
+      - name: cargo fmt
+        uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-      - uses: actions-rs/cargo@v1
+      - name: cargo clippy
+        uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
@@ -28,14 +32,16 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: nightly
           override: true
-      - name: Release Build
+      - name: Release build
         run: cargo build --release
-      - name: 'Upload Artifact'
+      - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: windows
@@ -46,14 +52,16 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: nightly
           override: true
-      - name: Release Build
+      - name: Release build
         run: cargo build --release
-      - name: 'Upload Artifact'
+      - name: Upload Artifact
         uses: actions/upload-artifact@v2
         with:
           name: macos
