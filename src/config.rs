@@ -75,11 +75,17 @@ impl Default for General {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Style {
+    pub custom_font: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Config {
     pub window: Window,
     pub search: Search,
     pub general: General,
+    pub style: Style,
 }
 
 pub fn get_config() -> Config {
