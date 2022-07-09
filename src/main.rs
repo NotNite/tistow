@@ -44,9 +44,45 @@ fn main() {
             ..eframe::NativeOptions::default()
         },
         Box::new(|cc| {
-            cc.egui_ctx.set_visuals(egui::Visuals::dark());
+            let mut visuals = egui::Visuals::dark();
 
-            if let Some(font_path) = &config.style.custom_font {
+            // colors
+            if let Some(bg_color) = &config.style.bg_color {
+                let bg_color = util::hex_to_color32(bg_color);
+                visuals.widgets.noninteractive.bg_fill = bg_color;
+            }
+
+            if let Some(input_bg_color) = &config.style.input_bg_color {
+                let input_bg_color = util::hex_to_color32(input_bg_color);
+                visuals.extreme_bg_color = input_bg_color;
+            }
+
+            if let Some(hovered_bg_color) = &config.style.hovered_bg_color {
+                let hovered_bg_color = util::hex_to_color32(hovered_bg_color);
+                visuals.widgets.hovered.bg_fill = hovered_bg_color;
+            }
+
+            if let Some(selected_bg_color) = &config.style.selected_bg_color {
+                let selected_bg_color = util::hex_to_color32(selected_bg_color);
+                visuals.widgets.active.bg_fill = selected_bg_color;
+            }
+
+            if let Some(text_color) = &config.style.text_color {
+                let text_color = util::hex_to_color32(text_color);
+                visuals.override_text_color = Some(text_color);
+            }
+
+            if let Some(stroke_color) = &config.style.stroke_color {
+                let stroke_color = util::hex_to_color32(stroke_color);
+                visuals.selection.stroke.color = stroke_color; // text input
+                visuals.widgets.hovered.bg_stroke.color = stroke_color; // hover
+                visuals.widgets.active.bg_stroke.color = stroke_color; // selection
+            }
+
+            cc.egui_ctx.set_visuals(visuals);
+
+            // fonts
+            if let Some(font_path) = &config.style.font {
                 let mut fonts = FontDefinitions::default();
 
                 fonts.font_data.insert(

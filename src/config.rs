@@ -77,7 +77,15 @@ impl Default for General {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Style {
-    pub custom_font: Option<String>,
+    pub font: Option<String>,
+
+    pub bg_color: Option<String>,
+    pub input_bg_color: Option<String>,
+    pub hovered_bg_color: Option<String>,
+    pub selected_bg_color: Option<String>,
+
+    pub text_color: Option<String>,
+    pub stroke_color: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
