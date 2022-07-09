@@ -3,14 +3,14 @@
 use eframe::egui;
 use egui::{Pos2, Vec2};
 
-use windows::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
-
 mod app;
 mod config;
 mod search;
 mod util;
 
 fn fix_stdout() {
+    use windows::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+
     unsafe {
         AttachConsole(ATTACH_PARENT_PROCESS);
     }
