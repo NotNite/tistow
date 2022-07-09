@@ -1,12 +1,25 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use eframe::egui;
 use egui::{Pos2, Vec2};
+
+use windows::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
 
 mod app;
 mod config;
 mod search;
 mod util;
 
+fn fix_stdout() {
+    unsafe {
+        AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+
 fn main() {
+    #[cfg(target_os = "windows")]
+    fix_stdout();
+
     let config = config::get_config();
     println!("{:#?}", config);
 
