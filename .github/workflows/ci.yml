@@ -3,8 +3,8 @@ on: [push, pull_request]
 name: Continuous integration
 
 jobs:
-  clippy:
-    name: Clippy
+  windows:
+    name: Windows builds
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
@@ -26,19 +26,6 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
-
-  build-windows:
-    name: Release builds for Windows
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: recursive
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
       - name: Release build
         run: cargo build --release
       - name: Upload artifact
@@ -47,8 +34,8 @@ jobs:
           name: windows
           path: target/release/tistow.exe
 
-  build-macos:
-    name: Release builds for macOS
+  macos:
+    name: macOS builds
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
@@ -59,6 +46,17 @@ jobs:
           profile: minimal
           toolchain: nightly
           override: true
+          components: rustfmt, clippy
+      - name: cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+      - name: cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
       - name: Release build
         run: cargo build --release
       - name: Upload artifact
