@@ -1,5 +1,7 @@
 # tistow
 
+[![Continuous integration](https://github.com/NotNite/tistow/actions/workflows/ci.yml/badge.svg)](https://github.com/NotNite/tistow/actions/workflows/ci.yml)
+
 > "The Informational Searching Tool on Windows"\
 > \- NotNite, 2022
 
