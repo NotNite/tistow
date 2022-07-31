@@ -171,7 +171,7 @@ impl Search {
 
         available_shortcuts.sort_by_cached_key(|x| x.kind);
 
-        let mut results: Vec<SearchResult> = available_shortcuts
+        available_shortcuts
             .iter()
             .map(|k| {
                 let path = &k.path;
@@ -193,8 +193,6 @@ impl Search {
                     }
                 }
             })
-            .collect();
-
-        results
+            .collect()
     }
 }
