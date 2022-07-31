@@ -124,3 +124,24 @@ pub fn get_config() -> Config {
 
     config
 }
+
+pub fn get_scripts() -> Vec<String> {
+    let project_dir = ProjectDirs::from("", "", "tistow").expect("couldn't get project dir");
+    let lua_dir = project_dir.config_dir().join("lua");
+
+    if !lua_dir.exists() {
+        std::fs::create_dir(&lua_dir).expect("couldn't create lua dir");
+    }
+
+    let mut results: Vec<String> = Vec::new();
+    for file in std::fs::read_dir(lua_dir).unwrap() {
+        let file = file.unwrap();
+        let file = file.path();
+        if file.extension().unwrap() == "lua" {
+            let script = std::fs::read_to_string(file).unwrap();
+            results.push(script);
+        }
+    }
+
+    results
+}

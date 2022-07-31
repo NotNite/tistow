@@ -3,7 +3,7 @@ name = "tistow"
 description = "The Informational Search Tool on Windows"
 authors = ["NotNite"]
 license = "MIT"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -14,6 +14,7 @@ toml = "0.5.9"
 figment = { version = "0.10", features = ["toml"] }
 directories = "4.0.1"
 shellexpand = "2.1"
+mlua = { version = "0.8.2", features = ["lua54", "vendored"] }
 
 egui = { path = "./egui/egui" }
 eframe = { path = "./egui/eframe" }

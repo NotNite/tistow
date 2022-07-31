@@ -1,11 +1,13 @@
+use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync;
+use std::sync::{self, Arc};
 
 use anyhow::Context;
 use arboard::Clipboard;
 use egui::Key;
+use mlua::Lua;
 
-use crate::config::Config;
+use crate::config::{get_scripts, Config};
 use crate::search::{ResultAction, Search, SearchResult};
 use crate::util::get_shortcuts;
 
@@ -48,12 +50,13 @@ pub struct App {
     _hotkey_thread: std::thread::JoinHandle<()>,
     events_rx: sync::mpsc::Receiver<HotkeyEvent>,
     _config: Config,
+    lua: Arc<mlua::Lua>,
 }
 
 impl App {
     pub fn new(ctx: egui::Context, config: Config) -> Self {
         let shortcuts = get_shortcuts(&config);
-        let search = Search::new(shortcuts, config.search.aliases.clone());
+        let mut search = Search::new(shortcuts, config.search.aliases.clone());
 
         let (events_tx, events_rx) = sync::mpsc::channel();
         let hotkey_thread = std::thread::spawn({
@@ -80,16 +83,61 @@ impl App {
             }
         });
 
+        // some very ugly wip lua code
+        let lua = Lua::new();
+        let lua_table = lua.create_table().unwrap();
+
+        lua.set_named_registry_value("custom_shortcuts", HashMap::<String, String>::new())
+            .unwrap();
+
+        let open = lua
+            .create_function(|_, open: String| -> mlua::Result<()> {
+                open::that(open)?;
+                Ok(())
+            })
+            .unwrap();
+        lua_table.set("open", open).unwrap();
+
+        let add_entry = lua
+            .create_function(
+                |lua, (name, func): (String, mlua::Function)| -> mlua::Result<()> {
+                    let mut custom_shortcuts: HashMap<String, mlua::Function> =
+                        lua.named_registry_value("custom_shortcuts").unwrap();
+                    custom_shortcuts.insert(name, func);
+                    lua.set_named_registry_value("custom_shortcuts", custom_shortcuts)
+                        .unwrap();
+
+                    Ok(())
+                },
+            )
+            .unwrap();
+        lua_table.set("add_entry", add_entry).unwrap();
+
+        lua.globals().set("tistow", lua_table).unwrap();
+
+        let scripts = get_scripts();
+        println!("scripts to load: {}", scripts.len());
+        for script in scripts {
+            lua.load(&script).exec().unwrap();
+        }
+
+        let custom_shortcuts: HashMap<String, mlua::Function> =
+            lua.named_registry_value("custom_shortcuts").unwrap();
+        for (shortcut, _) in custom_shortcuts {
+            search.add_custom_shortcut(shortcut);
+        }
+
         Self {
             search,
             state: AppState::First,
             _hotkey_thread: hotkey_thread,
             events_rx,
             _config: config,
+            lua: Arc::new(lua),
         }
     }
 
-    fn handle_select(selection: &SearchResult) -> anyhow::Result<bool> {
+    fn handle_select(selection: &SearchResult, lua: &Arc<Lua>) -> anyhow::Result<bool> {
         println!("select: {}", selection.text);
         let action = match &selection.action {
             Some(action) => action,
@@ -108,6 +156,15 @@ impl App {
                     .context("couldn't copy to clipboard")?;
 
                 false
+            }
+            ResultAction::Lua => {
+                // ghelp
+                let custom_shortcuts: HashMap<String, mlua::Function> =
+                    lua.named_registry_value("custom_shortcuts").unwrap();
+
+                let func = custom_shortcuts.get(&selection.text).unwrap();
+
+                func.call::<_, bool>(()).unwrap()
             }
         };
         Ok(should_close)
@@ -135,7 +192,9 @@ impl App {
         }
 
         egui::CentralPanel::default()
-            .show(ctx, |ui| Self::draw_opened_central(ui, opened, results))
+            .show(ctx, |ui| {
+                Self::draw_opened_central(ui, opened, results, &self.lua)
+            })
             .inner
     }
 
@@ -143,6 +202,7 @@ impl App {
         ui: &mut egui::Ui,
         mut opened: Opened,
         results: Vec<SearchResult>,
+        lua: &Arc<Lua>,
     ) -> anyhow::Result<AppState> {
         let input_widget = egui::TextEdit::singleline(&mut opened.input)
             .hint_text("search anything...")
@@ -161,7 +221,7 @@ impl App {
             };
 
             if let Some(result) = result {
-                if Self::handle_select(result)? {
+                if Self::handle_select(result, lua)? {
                     return Ok(AppState::Unopened);
                 }
             }
@@ -198,7 +258,7 @@ impl App {
                     }
 
                     if label_res.clicked() {
-                        let should_close = Self::handle_select(result)?;
+                        let should_close = Self::handle_select(result, lua)?;
                         if should_close {
                             return Ok(Some(AppState::Unopened));
                         }
@@ -238,6 +298,8 @@ impl eframe::App for App {
                 HotkeyEvent::Open => self.set_state(AppState::Opened(Opened::default()), frame),
             }
         }
-        self.set_state(self.get_new_state(ctx).unwrap(), frame);
+
+        let state = self.get_new_state(ctx);
+        self.set_state(state.unwrap(), frame);
     }
 }

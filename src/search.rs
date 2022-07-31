@@ -2,26 +2,32 @@ use figment::value::Map;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use std::path::PathBuf;
 
+#[derive(Clone)]
 pub enum SearchMode {
     Search,
     Calculator,
 }
 
+#[derive(Clone)]
 pub struct SearchResult {
     pub mode: SearchMode,
     pub text: String,
     pub action: Option<ResultAction>,
 }
 
+#[derive(Clone)]
 pub enum ResultAction {
     Open { path: PathBuf },
     Copy { text: String },
+    Lua,
 }
 
 pub struct Search {
     matcher: SkimMatcherV2,
     shortcuts: Vec<PathBuf>,
     aliases: Map<String, String>,
+
+    custom_shortcuts: Vec<SearchResult>,
 }
 
 struct KeyMatch {
@@ -43,7 +49,17 @@ impl Search {
             matcher: SkimMatcherV2::default(),
             shortcuts,
             aliases,
+
+            custom_shortcuts: Vec::new(),
         }
+    }
+
+    pub fn add_custom_shortcut(&mut self, name: String) {
+        self.custom_shortcuts.push(SearchResult {
+            mode: SearchMode::Search,
+            text: name,
+            action: Some(ResultAction::Lua),
+        });
     }
 
     pub fn search(&self, input: &str) -> Vec<SearchResult> {
@@ -130,7 +146,7 @@ impl Search {
 
         available_shortcuts.sort_by_cached_key(|x| x.kind);
 
-        let results = available_shortcuts
+        let mut results: Vec<SearchResult> = available_shortcuts
             .iter()
             .map(|k| {
                 let path = &k.path;
@@ -146,6 +162,7 @@ impl Search {
             })
             .collect();
 
+        results.append(&mut self.custom_shortcuts.clone());
         results
     }
 }
