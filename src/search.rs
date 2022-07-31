@@ -31,7 +31,8 @@ pub struct Search {
 }
 
 struct KeyMatch {
-    path: PathBuf,
+    path: Option<PathBuf>,
+    name: String,
     kind: Option<MatchKind>,
 }
 
@@ -96,6 +97,39 @@ impl Search {
         }]
     }
 
+    fn do_keymatch(
+        name: String,
+        path: Option<PathBuf>,
+        alias: Option<&String>,
+        input: &str,
+        fuzzy: bool,
+    ) -> KeyMatch {
+        let alias_matches = alias.is_some() && name.trim() == alias.unwrap().trim();
+        let exact_match = name.trim().to_lowercase() == input.trim().to_lowercase();
+        let starts_with = name
+            .trim()
+            .to_lowercase()
+            .starts_with(&input.trim().to_lowercase());
+
+        let match_kind = if alias_matches {
+            Some(MatchKind::Alias)
+        } else if exact_match {
+            Some(MatchKind::Exact)
+        } else if starts_with {
+            Some(MatchKind::StartsWith)
+        } else if fuzzy {
+            Some(MatchKind::Fuzzy)
+        } else {
+            None
+        };
+
+        KeyMatch {
+            path,
+            name,
+            kind: match_kind,
+        }
+    }
+
     fn mode_search(&self, input: &str) -> Vec<SearchResult> {
         let alias = self.aliases.get(input.trim());
 
@@ -107,42 +141,33 @@ impl Search {
         // - exact matches
         // - starts with input
         // - everything else
-        let mut available_shortcuts: Vec<KeyMatch> = shortcuts
-            .iter()
-            .map(|path| {
-                let path = path.unwrap().to_path_buf();
-                let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+        let mut vec: Vec<KeyMatch> = Vec::new();
+        for shortcut in shortcuts {
+            let path = shortcut.unwrap().to_path_buf();
+            let name = path.file_stem().unwrap().to_str().unwrap().to_string();
 
-                let alias_matches = alias.is_some() && name.trim() == alias.unwrap().trim();
-                let exact_match = name.trim().to_lowercase() == input.trim().to_lowercase();
-                let starts_with = name
-                    .trim()
-                    .to_lowercase()
-                    .starts_with(&input.trim().to_lowercase());
-                let fuzzy = self
-                    .matcher
-                    .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
-                    .is_some();
+            let fuzzy = self
+                .matcher
+                .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
+                .is_some();
 
-                let match_kind = if alias_matches {
-                    Some(MatchKind::Alias)
-                } else if exact_match {
-                    Some(MatchKind::Exact)
-                } else if starts_with {
-                    Some(MatchKind::StartsWith)
-                } else if fuzzy {
-                    Some(MatchKind::Fuzzy)
-                } else {
-                    None
-                };
+            let km = Self::do_keymatch(name, Some(path), alias, input, fuzzy);
+            vec.push(km);
+        }
 
-                KeyMatch {
-                    path,
-                    kind: match_kind,
-                }
-            })
-            .filter(|x| x.kind.is_some())
-            .collect();
+        for custom_shortcut in &self.custom_shortcuts {
+            let name = custom_shortcut.text.clone();
+            let fuzzy = self
+                .matcher
+                .fuzzy_match(&name.to_lowercase(), &input.to_lowercase())
+                .is_some();
+
+            let km = Self::do_keymatch(name, None, alias, input, fuzzy);
+            vec.push(km);
+        }
+
+        let mut available_shortcuts: Vec<&KeyMatch> =
+            vec.iter().filter(|x| x.kind.is_some()).collect();
 
         available_shortcuts.sort_by_cached_key(|x| x.kind);
 
@@ -150,19 +175,26 @@ impl Search {
             .iter()
             .map(|k| {
                 let path = &k.path;
-                let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+                let name = &k.name;
 
-                SearchResult {
-                    mode: SearchMode::Search,
-                    text: name,
-                    action: Some(ResultAction::Open {
-                        path: path.to_owned(),
-                    }),
+                if let Some(path) = path {
+                    SearchResult {
+                        mode: SearchMode::Search,
+                        text: name.to_string(),
+                        action: Some(ResultAction::Open {
+                            path: path.to_owned(),
+                        }),
+                    }
+                } else {
+                    SearchResult {
+                        mode: SearchMode::Search,
+                        text: name.to_string(),
+                        action: Some(ResultAction::Lua),
+                    }
                 }
             })
             .collect();
 
-        results.append(&mut self.custom_shortcuts.clone());
         results
     }
 }
