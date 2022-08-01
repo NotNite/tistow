@@ -160,22 +160,24 @@ impl App {
             }
             shortcuts_tx.send(ScriptEvent::Done).unwrap();
 
-            match run_rx.recv() {
-                Ok(LuaEvent::RunCallback(callback)) => {
-                    let custom_shortcuts: HashMap<String, mlua::Function> =
-                        lua.named_registry_value("custom_shortcuts").unwrap();
-                    let func = custom_shortcuts.get(&callback).unwrap();
-                    let should_close = func.call::<_, bool>(()).unwrap();
+            loop {
+                match run_rx.recv() {
+                    Ok(LuaEvent::RunCallback(callback)) => {
+                        let custom_shortcuts: HashMap<String, mlua::Function> =
+                            lua.named_registry_value("custom_shortcuts").unwrap();
+                        let func = custom_shortcuts.get(&callback).unwrap();
+                        let should_close = func.call::<_, bool>(()).unwrap();
 
-                    if should_close {
-                        close_tx.send(LuaEvent::Close).unwrap();
+                        if should_close {
+                            close_tx.send(LuaEvent::Close).unwrap();
+                        }
                     }
-                }
-                Ok(LuaEvent::Close) => {
-                    todo!()
-                }
-                Err(e) => {
-                    println!("lua thread error: {}", e);
+                    Ok(LuaEvent::Close) => {
+                        todo!()
+                    }
+                    Err(e) => {
+                        println!("lua thread error: {}", e);
+                    }
                 }
             }
         });
