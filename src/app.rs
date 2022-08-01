@@ -98,6 +98,19 @@ impl App {
             .unwrap();
         lua_table.set("open", open).unwrap();
 
+        let copy = lua
+            .create_function(|_, text: String| -> mlua::Result<()> {
+                Clipboard::new()
+                    .unwrap()
+                    .set_text(text)
+                    .context("couldn't copy to clipboard")
+                    .unwrap();
+
+                Ok(())
+            })
+            .unwrap();
+        lua_table.set("copy", copy).unwrap();
+
         let add_entry = lua
             .create_function(
                 |lua, (name, func): (String, mlua::Function)| -> mlua::Result<()> {
