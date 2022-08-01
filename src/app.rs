@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::{self, Arc};
+use std::sync::{self, Arc, Mutex};
 
 use anyhow::Context;
 use arboard::Clipboard;
@@ -14,6 +14,18 @@ use crate::util::get_shortcuts;
 #[derive(Clone, Copy, Debug)]
 pub enum HotkeyEvent {
     Open,
+}
+
+#[derive(Clone, Debug)]
+pub enum ScriptEvent {
+    Add(String),
+    Done,
+}
+
+#[derive(Clone, Debug)]
+pub enum LuaEvent {
+    RunCallback(String),
+    Close,
 }
 
 #[derive(Default, Clone, Debug)]
@@ -47,10 +59,13 @@ enum AppState {
 pub struct App {
     search: Search,
     state: AppState,
+
+    hotkeys_rx: sync::mpsc::Receiver<HotkeyEvent>,
+    run_tx: sync::mpsc::Sender<LuaEvent>,
+    close_rx: sync::mpsc::Receiver<LuaEvent>,
+
     _hotkey_thread: std::thread::JoinHandle<()>,
-    events_rx: sync::mpsc::Receiver<HotkeyEvent>,
     _config: Config,
-    lua: Arc<mlua::Lua>,
 }
 
 impl App {
@@ -58,7 +73,7 @@ impl App {
         let shortcuts = get_shortcuts(&config);
         let mut search = Search::new(shortcuts, config.search.aliases.clone());
 
-        let (events_tx, events_rx) = sync::mpsc::channel();
+        let (events_tx, hotkeys_rx) = sync::mpsc::channel();
         let hotkey_thread = std::thread::spawn({
             let config = config.clone();
             let hotkeys: Vec<_> = config
@@ -83,74 +98,117 @@ impl App {
             }
         });
 
-        // some very ugly wip lua code
-        let lua = Lua::new();
-        let lua_table = lua.create_table().unwrap();
+        let (run_tx, run_rx) = sync::mpsc::channel();
+        let (close_tx, close_rx) = sync::mpsc::channel();
+        let (shortcuts_tx, shortcuts_rx) = sync::mpsc::channel();
 
-        lua.set_named_registry_value("custom_shortcuts", HashMap::<String, String>::new())
-            .unwrap();
+        let lua_thread = std::thread::spawn(move || {
+            let lua = Lua::new();
+            let lua_table = lua.create_table().unwrap();
 
-        let open = lua
-            .create_function(|_, open: String| -> mlua::Result<()> {
-                open::that(open)?;
-                Ok(())
-            })
-            .unwrap();
-        lua_table.set("open", open).unwrap();
+            lua.set_named_registry_value("custom_shortcuts", HashMap::<String, String>::new())
+                .unwrap();
 
-        let copy = lua
-            .create_function(|_, text: String| -> mlua::Result<()> {
-                Clipboard::new()
-                    .unwrap()
-                    .set_text(text)
-                    .context("couldn't copy to clipboard")
-                    .unwrap();
+            let open = lua
+                .create_function(|_, open: String| -> mlua::Result<()> {
+                    open::that(open)?;
+                    Ok(())
+                })
+                .unwrap();
+            lua_table.set("open", open).unwrap();
 
-                Ok(())
-            })
-            .unwrap();
-        lua_table.set("copy", copy).unwrap();
-
-        let add_entry = lua
-            .create_function(
-                |lua, (name, func): (String, mlua::Function)| -> mlua::Result<()> {
-                    let mut custom_shortcuts: HashMap<String, mlua::Function> =
-                        lua.named_registry_value("custom_shortcuts").unwrap();
-                    custom_shortcuts.insert(name, func);
-                    lua.set_named_registry_value("custom_shortcuts", custom_shortcuts)
+            let copy = lua
+                .create_function(|_, text: String| -> mlua::Result<()> {
+                    Clipboard::new()
+                        .unwrap()
+                        .set_text(text)
+                        .context("couldn't copy to clipboard")
                         .unwrap();
 
                     Ok(())
-                },
-            )
-            .unwrap();
-        lua_table.set("add_entry", add_entry).unwrap();
+                })
+                .unwrap();
+            lua_table.set("copy", copy).unwrap();
 
-        lua.globals().set("tistow", lua_table).unwrap();
+            let add_entry = lua
+                .create_function(
+                    |lua, (name, func): (String, mlua::Function)| -> mlua::Result<()> {
+                        let mut custom_shortcuts: HashMap<String, mlua::Function> =
+                            lua.named_registry_value("custom_shortcuts").unwrap();
+                        custom_shortcuts.insert(name, func);
+                        lua.set_named_registry_value("custom_shortcuts", custom_shortcuts)
+                            .unwrap();
 
-        let scripts = get_scripts();
-        println!("scripts to load: {}", scripts.len());
-        for script in scripts {
-            lua.load(&script).exec().unwrap();
-        }
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            lua_table.set("add_entry", add_entry).unwrap();
 
-        let custom_shortcuts: HashMap<String, mlua::Function> =
-            lua.named_registry_value("custom_shortcuts").unwrap();
-        for (shortcut, _) in custom_shortcuts {
-            search.add_custom_shortcut(shortcut);
+            lua.globals().set("tistow", lua_table).unwrap();
+
+            let scripts = get_scripts();
+            println!("scripts to load: {}", scripts.len());
+            for script in scripts {
+                lua.load(&script).exec().unwrap();
+            }
+
+            let custom_shortcuts: HashMap<String, mlua::Function> =
+                lua.named_registry_value("custom_shortcuts").unwrap();
+            for (name, _) in custom_shortcuts {
+                shortcuts_tx.send(ScriptEvent::Add(name)).unwrap();
+            }
+            shortcuts_tx.send(ScriptEvent::Done).unwrap();
+
+            match run_rx.recv() {
+                Ok(LuaEvent::RunCallback(callback)) => {
+                    let custom_shortcuts: HashMap<String, mlua::Function> =
+                        lua.named_registry_value("custom_shortcuts").unwrap();
+                    let func = custom_shortcuts.get(&callback).unwrap();
+                    let should_close = func.call::<_, bool>(()).unwrap();
+
+                    close_tx.send(LuaEvent::Close);
+                }
+                Ok(LuaEvent::Close) => {
+                    todo!()
+                }
+                Err(e) => {
+                    println!("lua thread error: {}", e);
+                }
+            }
+        });
+
+        loop {
+            match shortcuts_rx.recv() {
+                Ok(ScriptEvent::Add(name)) => {
+                    search.add_custom_shortcut(name);
+                }
+                Ok(ScriptEvent::Done) => {
+                    break;
+                }
+                Err(e) => {
+                    println!("shortcuts thread error: {}", e);
+                }
+            }
         }
 
         Self {
             search,
             state: AppState::First,
+
+            hotkeys_rx,
+            run_tx,
+            close_rx,
+
             _hotkey_thread: hotkey_thread,
-            events_rx,
             _config: config,
-            lua: Arc::new(lua),
         }
     }
 
-    fn handle_select(selection: &SearchResult, lua: &Arc<Lua>) -> anyhow::Result<bool> {
+    fn handle_select(
+        selection: &SearchResult,
+        run_tx: &sync::mpsc::Sender<LuaEvent>,
+    ) -> anyhow::Result<bool> {
         println!("select: {}", selection.text);
         let action = match &selection.action {
             Some(action) => action,
@@ -172,12 +230,11 @@ impl App {
             }
             ResultAction::Lua => {
                 // ghelp
-                let custom_shortcuts: HashMap<String, mlua::Function> =
-                    lua.named_registry_value("custom_shortcuts").unwrap();
+                run_tx
+                    .send(LuaEvent::RunCallback(selection.text.clone()))
+                    .unwrap();
 
-                let func = custom_shortcuts.get(&selection.text).unwrap();
-
-                func.call::<_, bool>(()).unwrap()
+                false
             }
         };
         Ok(should_close)
@@ -206,7 +263,7 @@ impl App {
 
         egui::CentralPanel::default()
             .show(ctx, |ui| {
-                Self::draw_opened_central(ui, opened, results, &self.lua)
+                Self::draw_opened_central(ui, opened, results, &self.close_rx, &self.run_tx)
             })
             .inner
     }
@@ -215,12 +272,17 @@ impl App {
         ui: &mut egui::Ui,
         mut opened: Opened,
         results: Vec<SearchResult>,
-        lua: &Arc<Lua>,
+        close_rx: &sync::mpsc::Receiver<LuaEvent>,
+        run_tx: &sync::mpsc::Sender<LuaEvent>,
     ) -> anyhow::Result<AppState> {
         let input_widget = egui::TextEdit::singleline(&mut opened.input)
             .hint_text("search anything...")
             .lock_focus(true);
         let input_res = ui.add_sized((ui.available_width(), 18_f32), input_widget);
+
+        if close_rx.try_recv().is_ok() {
+            return Ok(AppState::Unopened);
+        }
 
         if ui.input().key_pressed(egui::Key::Enter) && !results.is_empty() {
             let result = if input_res.lost_focus() {
@@ -234,7 +296,7 @@ impl App {
             };
 
             if let Some(result) = result {
-                if Self::handle_select(result, lua)? {
+                if Self::handle_select(result, run_tx)? {
                     return Ok(AppState::Unopened);
                 }
             }
@@ -271,7 +333,7 @@ impl App {
                     }
 
                     if label_res.clicked() {
-                        let should_close = Self::handle_select(result, lua)?;
+                        let should_close = Self::handle_select(result, run_tx)?;
                         if should_close {
                             return Ok(Some(AppState::Unopened));
                         }
@@ -305,7 +367,7 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let events: Vec<_> = self.events_rx.try_iter().collect();
+        let events: Vec<_> = self.hotkeys_rx.try_iter().collect();
         for event in events {
             match event {
                 HotkeyEvent::Open => self.set_state(AppState::Opened(Opened::default()), frame),
