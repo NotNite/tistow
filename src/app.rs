@@ -17,7 +17,7 @@ pub enum HotkeyEvent {
 }
 
 #[derive(Clone, Debug)]
-pub enum ScriptEvent {
+pub enum LuaShortcutEvent {
     Add(String),
     Done,
 }
@@ -26,6 +26,12 @@ pub enum ScriptEvent {
 pub enum LuaEvent {
     RunCallback(String),
     Close,
+}
+
+pub struct AppChannels {
+    hotkeys_rx: sync::mpsc::Receiver<HotkeyEvent>,
+    lua_run_tx: sync::mpsc::Sender<LuaEvent>,
+    lua_close_rx: sync::mpsc::Receiver<LuaEvent>,
 }
 
 #[derive(Default, Clone, Debug)]
@@ -59,11 +65,7 @@ enum AppState {
 pub struct App {
     search: Search,
     state: AppState,
-
-    hotkeys_rx: sync::mpsc::Receiver<HotkeyEvent>,
-    run_tx: sync::mpsc::Sender<LuaEvent>,
-    close_rx: sync::mpsc::Receiver<LuaEvent>,
-
+    app_channels: AppChannels,
     _hotkey_thread: std::thread::JoinHandle<()>,
     _config: Config,
 }
@@ -156,9 +158,9 @@ impl App {
             let custom_shortcuts: HashMap<String, mlua::Function> =
                 lua.named_registry_value("custom_shortcuts").unwrap();
             for (name, _) in custom_shortcuts {
-                shortcuts_tx.send(ScriptEvent::Add(name)).unwrap();
+                shortcuts_tx.send(LuaShortcutEvent::Add(name)).unwrap();
             }
-            shortcuts_tx.send(ScriptEvent::Done).unwrap();
+            shortcuts_tx.send(LuaShortcutEvent::Done).unwrap();
 
             loop {
                 match run_rx.recv() {
@@ -184,10 +186,10 @@ impl App {
 
         loop {
             match shortcuts_rx.recv() {
-                Ok(ScriptEvent::Add(name)) => {
+                Ok(LuaShortcutEvent::Add(name)) => {
                     search.add_custom_shortcut(name);
                 }
-                Ok(ScriptEvent::Done) => {
+                Ok(LuaShortcutEvent::Done) => {
                     break;
                 }
                 Err(e) => {
@@ -200,19 +202,18 @@ impl App {
             search,
             state: AppState::First,
 
-            hotkeys_rx,
-            run_tx,
-            close_rx,
+            app_channels: AppChannels {
+                hotkeys_rx,
+                lua_run_tx: run_tx,
+                lua_close_rx: close_rx,
+            },
 
             _hotkey_thread: hotkey_thread,
             _config: config,
         }
     }
 
-    fn handle_select(
-        selection: &SearchResult,
-        run_tx: &sync::mpsc::Sender<LuaEvent>,
-    ) -> anyhow::Result<bool> {
+    fn handle_select(selection: &SearchResult, app_channels: &AppChannels) -> anyhow::Result<bool> {
         println!("select: {}", selection.text);
         let action = match &selection.action {
             Some(action) => action,
@@ -234,7 +235,8 @@ impl App {
             }
             ResultAction::Lua => {
                 // ghelp
-                run_tx
+                app_channels
+                    .lua_run_tx
                     .send(LuaEvent::RunCallback(selection.text.clone()))
                     .unwrap();
 
@@ -267,7 +269,7 @@ impl App {
 
         egui::CentralPanel::default()
             .show(ctx, |ui| {
-                Self::draw_opened_central(ui, opened, results, &self.close_rx, &self.run_tx)
+                Self::draw_opened_central(ui, opened, results, &self.app_channels)
             })
             .inner
     }
@@ -276,15 +278,14 @@ impl App {
         ui: &mut egui::Ui,
         mut opened: Opened,
         results: Vec<SearchResult>,
-        close_rx: &sync::mpsc::Receiver<LuaEvent>,
-        run_tx: &sync::mpsc::Sender<LuaEvent>,
+        app_channels: &AppChannels,
     ) -> anyhow::Result<AppState> {
         let input_widget = egui::TextEdit::singleline(&mut opened.input)
             .hint_text("search anything...")
             .lock_focus(true);
         let input_res = ui.add_sized((ui.available_width(), 18_f32), input_widget);
 
-        if close_rx.try_recv().is_ok() {
+        if app_channels.lua_close_rx.try_recv().is_ok() {
             return Ok(AppState::Unopened);
         }
 
@@ -300,7 +301,7 @@ impl App {
             };
 
             if let Some(result) = result {
-                if Self::handle_select(result, run_tx)? {
+                if Self::handle_select(result, app_channels)? {
                     return Ok(AppState::Unopened);
                 }
             }
@@ -337,7 +338,7 @@ impl App {
                     }
 
                     if label_res.clicked() {
-                        let should_close = Self::handle_select(result, run_tx)?;
+                        let should_close = Self::handle_select(result, app_channels)?;
                         if should_close {
                             return Ok(Some(AppState::Unopened));
                         }
@@ -371,7 +372,7 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let events: Vec<_> = self.hotkeys_rx.try_iter().collect();
+        let events: Vec<_> = self.app_channels.hotkeys_rx.try_iter().collect();
         for event in events {
             match event {
                 HotkeyEvent::Open => self.set_state(AppState::Opened(Opened::default()), frame),
