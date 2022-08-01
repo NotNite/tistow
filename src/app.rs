@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::{self, Arc, Mutex};
+use std::sync;
 
 use anyhow::Context;
 use arboard::Clipboard;
@@ -102,7 +102,7 @@ impl App {
         let (close_tx, close_rx) = sync::mpsc::channel();
         let (shortcuts_tx, shortcuts_rx) = sync::mpsc::channel();
 
-        let lua_thread = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let lua = Lua::new();
             let lua_table = lua.create_table().unwrap();
 
@@ -167,7 +167,9 @@ impl App {
                     let func = custom_shortcuts.get(&callback).unwrap();
                     let should_close = func.call::<_, bool>(()).unwrap();
 
-                    close_tx.send(LuaEvent::Close);
+                    if should_close {
+                        close_tx.send(LuaEvent::Close).unwrap();
+                    }
                 }
                 Ok(LuaEvent::Close) => {
                     todo!()
