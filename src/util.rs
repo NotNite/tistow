@@ -94,3 +94,41 @@ pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
         })
         .collect()
 }
+
+#[cfg(target_os = "linux")]
+pub fn get_shortcuts(config: &Config) -> Vec<PathBuf> {
+    config
+        .search
+        .shortcut_paths
+        .iter()
+        .map(|path| {
+            walkdir::WalkDir::new(Path::new(
+                shellexpand::env(&path)
+                    .expect("couldn't get shortcut path")
+                    .as_ref(),
+            ))
+        })
+        .flat_map(|shortcuts_dir| {
+            shortcuts_dir
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|x| {
+                    let path = x.path().to_str().unwrap();
+                    let lowercase = path.to_lowercase();
+                    let ignored = config
+                        .search
+                        .ignore_paths
+                        .iter()
+                        .map(|ignore_str| {
+                            shellexpand::env(&ignore_str)
+                                .expect("couldn't get shortcut ignore dir")
+                                .to_lowercase()
+                        })
+                        .any(|ignore_dir| lowercase.contains(&ignore_dir));
+
+                    !ignored && (lowercase.ends_with(".desktop"))
+                })
+                .map(|x| x.path().to_owned())
+        })
+        .collect()
+}

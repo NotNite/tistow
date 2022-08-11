@@ -60,6 +60,19 @@ impl Default for Search {
             aliases: Map::new(),
         }
     }
+
+    #[cfg(target_os = "linux")]
+    fn default() -> Self {
+        Self {
+            shortcut_paths: vec![
+                "/usr/share/applications".to_string(),
+                "/usr/local/share/applications".to_string(),
+                "${HOME}/.local/share/applications".to_string(),
+            ],
+            ignore_paths: vec![],
+            aliases: Map::new(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
