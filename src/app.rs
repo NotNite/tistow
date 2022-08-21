@@ -1,12 +1,10 @@
 use std::collections::HashMap;
-use std::process::Command;
 use std::str::FromStr;
-use std::{fs, sync};
+use std::sync;
 
 use anyhow::Context;
 use arboard::Clipboard;
 use egui::Key;
-use freedesktop_desktop_entry::DesktopEntry;
 use mlua::Lua;
 
 use crate::config::{get_scripts, Config};
